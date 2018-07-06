@@ -28,20 +28,25 @@ Requirements:
 
 Create virtual env, install dependencies, link the application:
 
+```
   python3 -m venv venv
   . venv/bin/activate
   make init
   make dev
+```
 
 To start in development mode:
 
+```
   FLASK_ENV=development voyandz -f config/minimal
+```
 
 Cleaning:
 
+```
   make clean
   rm -rf venv
-
+```
 
 Repository Structure
 ====================
@@ -49,7 +54,9 @@ Repository Structure
 Project file structure should adhere to the practices
 recommended for Python and Flask projects.
 
+```
   .
-  \- config - example configuration files
-  \- sandbox - development scraps, experiments
+  |- config - example configuration files
+  |- sandbox - development scraps, experiments
   \- voyandz - application code
+```
