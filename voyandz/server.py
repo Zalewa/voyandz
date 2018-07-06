@@ -1,6 +1,7 @@
-from voyandz import app, config
+from voyandz import app, config, piping
 import flask
 
+from io import BytesIO
 from pprint import pformat
 import os
 
@@ -10,9 +11,25 @@ def hello():
     return "voyandz reporting for duty"
 
 
-@app.route('/stream/')
-def stream():
-    return "no streams yet"
+@app.route('/stream/<name>')
+def stream(name):
+    try:
+        stream_cfg = _cfg('streams/{}'.format(name))
+    except KeyError:
+        flask.abort(404)
+    stream_type = stream_cfg["type"]
+    if stream_type == "stream":
+        return flask.Response(piping.stream(stream_cfg),
+                              mimetype=stream_cfg['mimetype'])
+    elif stream_type == "shot":
+        try:
+            output = piping.shot(stream_cfg)
+        except piping.Error as e:
+            return flask.make_response("<pre>{}</pre>".format(
+                flask.escape(str(e))), 500)
+        return flask.send_file(BytesIO(output), mimetype="image/png")
+    else:
+        return flask.make_response("this stream is of unknown type", 500)
 
 
 @app.route('/cfg')

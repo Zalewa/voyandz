@@ -1,0 +1,23 @@
+## IP address on which the server will be listening.
+listenaddr: '127.0.0.1'
+
+## Network port on which the server will be listening.
+listenport: 8090
+
+## Streams
+streams:
+  camera:
+    command: ffmpeg -i /dev/video0 -f mpjpeg -qmin 1 -qmax 6 -r 15 -
+    type: stream
+    mimetype: multipart/x-mixed-replace;boundary=ffserver
+  camera_pic:
+    command: ffmpeg -i /dev/video0 -f image2pipe -vcodec png -vframes 1 -
+    type: shot
+    mimetype: image/png
+
+## Extra pages
+pages:
+  ## Dump config at /cfg
+  config: false
+  ## Dump statistics at /stat
+  stat: true
