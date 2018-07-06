@@ -1,0 +1,42 @@
+## IP address on which the server will be listening.
+listenaddr: '127.0.0.1'
+
+## Network port on which the server will be listening.
+listenport: 8090
+
+## Streams
+streams:
+  -
+    name: 1_video_view
+    command: ffmpeg -i /dev/video0 -f mpjpeg -qmin 1 -qmax 6 -r 15 -
+    type: stream
+    mimetype: multipart/x-mixed-replace;boundary=ffserver
+  -
+    name: 1_pic
+    command: ffmpeg -i /dev/video0 -vframes 1 -vcodec png -f image2pipe -
+    type: shot
+    mimetype: image/png
+  -
+    name: 1_video_rec
+    command: >
+      ffmpeg -i /dev/video0 -f mpegts -vcodec h264_nvenc -qp 23 -g 30
+      -bf 0 -zerolatency 1 -strict_gop 1 -sc_threshold 0 -
+    type: stream
+    mimetype: video/ts
+  -
+    name: 1_audio_wav
+    command: ffmpeg -i hw:1 -f s16le -acodec pcm_s16le -ar 4800 -ac 2 -
+    type: stream
+    mimetype: audio/wav
+  -
+    name: 1_audio_mp3
+    command: ffmpeg -i hw:1 -f mp3 -acodec mp3 -b:a 192k -
+    type: stream
+    mimetype: audio/mp3
+
+## Extra pages
+pages:
+  ## Dump config at /cfg
+  config: true
+  ## Dump statistics at /stat
+  stat: true
