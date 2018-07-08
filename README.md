@@ -24,7 +24,7 @@ Requirements:
 
 - Python 3
 - virtualenv
-- make
+- make (optional)
 
 Create virtual env, install dependencies, link the application:
 
