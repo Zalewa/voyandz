@@ -32,8 +32,8 @@ def stream(name):
         return flask.make_response("this stream is of unknown type", 500)
 
 
-@app.route('/cfg')
-def cfg():
+@app.route('/config')
+def config_page():
     if not _cfg('pages/config') and os.environ.get('FLASK_ENV') != 'development':
         flask.abort(403)
     configdump = pformat(app.config['voyandz'])
