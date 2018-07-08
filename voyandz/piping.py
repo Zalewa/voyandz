@@ -175,29 +175,16 @@ class _MultiClientBuffer:
     def write(self, chunk):
         if self._closed:
             return
-        pipes_to_del = []
-        try:
-            with self._pipes_lock:
-                pipes = list(self._pipes)
-            for wpipe in pipes:
-                try:
-                    os.write(wpipe, chunk)
-                except BrokenPipeError:
-                    pipes_to_del.append(wpipe)
-                    os.close(wpipe)
-                except Exception:
-                    pipes_to_del = range(len(pipes))
-                    raise
-        finally:
-            if pipes_to_del:
+        with self._pipes_lock:
+            pipes = list(self._pipes)
+        for wpipe in pipes:
+            try:
+                os.write(wpipe, chunk)
+            except IOError:
                 with self._pipes_lock:
-                    for wpipe in pipes_to_del:
-                        try:
-                            idx = self._pipes.index(wpipe)
-                        except ValueError:
-                            pass
-                        else:
-                            del self._pipes[idx]
+                    if wpipe in self._pipes:
+                        os.close(wpipe)
+                        del self._pipes[self._pipes.index(wpipe)]
 
     def close(self):
         with self._pipes_lock:
