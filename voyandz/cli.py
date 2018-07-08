@@ -32,7 +32,7 @@ def parse_args():
     opt_parser.add_option('-f', dest='conffile',
                           help='change config file (default: {})'.format(config.DEFAULT_CONFFILE),
                           default=config.DEFAULT_CONFFILE)
-    opt_parser.add_option('-v', '--version', dest='version', default=False,
+    opt_parser.add_option('-V', '--version', dest='version', default=False,
                           action='store_true', help='display version and quit')
     options, _ = opt_parser.parse_args()
     return options
