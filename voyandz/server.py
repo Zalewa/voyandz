@@ -1,9 +1,12 @@
-from voyandz import app, config, piping
+from voyandz import app, config, logging, piping
 import flask
 
 from io import BytesIO
 from pprint import pformat
 import os
+
+
+flask.logging.default_handler.setFormatter(logging.LogFormatter())
 
 
 @app.route('/')
