@@ -1,3 +1,11 @@
+# This configuration file will try to read input from
+# a V4L2 camera and output it as mpjpeg stream of pictures
+# on the 'camera' stream and as a singular screenshot on
+# 'camera_pic' shot-stream. Depending on you underlying
+# device, it may not be possible to have more than one
+# stream active at the same time - connection to the
+# device will faile with EBUSY errno.
+
 ## IP address on which the server will be listening.
 listenaddr: '127.0.0.1'
 

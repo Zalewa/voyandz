@@ -1,3 +1,8 @@
+# Example of a complicated set of AV streams from
+# a singular V4L2/ALSA device. Each stream serves
+# a different purpose. Also, it is expected that
+# the device can support multiple connections.
+
 ## IP address on which the server will be listening.
 listenaddr: '127.0.0.1'
 
