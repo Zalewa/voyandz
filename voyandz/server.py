@@ -54,6 +54,21 @@ def init():
         config.init_app_config(app, None)
 
 
+@app.after_request
+def add_headers(request):
+    """
+    Add headers to both force latest IE rendering engine or Chrome Frame,
+    and also to cache the rendered page for 10 minutes.
+
+    Credit: https://stackoverflow.com/a/34067710/1089357
+    """
+    request.headers["Cache-Control"] = ("no-cache, no-store, "
+                                        "must-revalidate, public, max-age=0")
+    request.headers["Pragma"] = "no-cache"
+    request.headers["Expires"] = "0"
+    return request
+
+
 def _cfg(path=""):
     tokens = [t for t in path.split('/') if t]
     root = app.config[config.CONF_KEY]
