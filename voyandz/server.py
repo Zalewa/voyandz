@@ -17,22 +17,19 @@ def hello():
 @app.route('/stream/<name>')
 def stream(name):
     try:
-        stream_cfg = _cfg('streams/{}'.format(name))
-    except KeyError:
+        stream_type, stream_mimetype, output = piping.stream(_cfg(), name)
+    except piping.NoSuchStreamError as e:
         flask.abort(404)
-    stream_type = stream_cfg["type"]
-    if stream_type == "stream":
-        return flask.Response(piping.stream(stream_cfg),
-                              mimetype=stream_cfg['mimetype'])
-    elif stream_type == "shot":
-        try:
-            output = piping.shot(stream_cfg)
-        except piping.Error as e:
-            return flask.make_response("<pre>{}</pre>".format(
-                flask.escape(str(e))), 500)
-        return flask.send_file(BytesIO(output), mimetype="image/png")
+    except piping.Error as e:
+        return flask.make_response("<pre>{}</pre>".format(
+            flask.escape(str(e))), 500)
     else:
-        return flask.make_response("this stream is of unknown type", 500)
+        if stream_type == "stream":
+            return flask.Response(output, mimetype=stream_mimetype)
+        elif stream_type == "shot":
+            return flask.send_file(BytesIO(output), mimetype=stream_mimetype)
+        else:
+            return flask.make_response("this stream is of unknown type", 500)
 
 
 @app.route('/config')

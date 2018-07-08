@@ -5,6 +5,7 @@ import errno
 import os
 import threading
 import subprocess
+import sys
 
 
 # TODO optimal read size?
@@ -15,24 +16,50 @@ class Error(Exception):
     pass
 
 
-def stream(stream_cfg):
+class NoSuchStreamError(Error):
+    pass
+
+
+def stream(cfg, stream_name):
+    try:
+        stream_cfg = cfg['streams'][stream_name]
+    except KeyError:
+        raise NoSuchStreamError(stream_name)
+    try:
+        mimetype = stream_cfg["mimetype"]
+    except KeyError:
+        raise Error("stream '{}' is of unknown mimetype".format(mimetype))
+    stream_type = stream_cfg.get("type")
+    if stream_type == "stream":
+        output = _stream(stream_cfg)  # pass feeds
+    elif stream_type == "shot":
+        output = _shot(stream_cfg)  # pass feeds
+    else:
+        raise Error("stream '{}' is of unknown type".format(stream_name))
+    return stream_type, mimetype, output
+
+
+def _stream(stream_cfg):
     cmd = stream_cfg['command']
 
     def generate():
         with _global_ctx.feed(cmd) as feed:
             rpipe = feed.new_reader()
+            print("new feed {}".format(rpipe), file=sys.stderr)
             try:
                 while feed.is_alive():
                     chunk = os.read(rpipe, _PIPE_CHUNK_SIZE)
+                    print("  kunky chunk", file=sys.stderr)
                     if not chunk:
                         break
                     yield chunk
             finally:
+                print("klosing rpipe, connection is going away {}".format(rpipe), file=sys.stderr)
                 os.close(rpipe)
     return generate()
 
 
-def shot(stream_cfg):
+def _shot(stream_cfg):
     cmd = stream_cfg['command']
     p = subprocess.Popen(cmd, stdin=None, stdout=subprocess.PIPE,
                          stderr=subprocess.PIPE, close_fds=True, shell=True)
