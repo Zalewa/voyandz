@@ -28,6 +28,7 @@ def stream(name):
         try:
             output = piping.shot(stream_cfg)
         except piping.Error as e:
+            app.logger.exception(e)
             return flask.make_response("<pre>{}</pre>".format(
                 flask.escape(str(e))), 500)
         return flask.send_file(BytesIO(output), mimetype="image/png")
