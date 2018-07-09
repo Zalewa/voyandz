@@ -4,8 +4,9 @@ import atexit
 import errno
 import os
 import threading
+import time
+import shlex
 import subprocess
-import sys
 
 
 # TODO optimal read size?
@@ -13,6 +14,20 @@ _PIPE_CHUNK_SIZE = 10240
 
 
 class Error(Exception):
+    pass
+
+
+class FeedReuseError(Error):
+    def __init__(self, details, feed_id, *args):
+        super(FeedReuseError, self).__init__(
+            "tried to incorrectly reuse feed{}, feed_id: {}".format(
+                " {}".format(details) if details else "",
+                feed_id),
+            feed_id,
+            *args)
+
+
+class NoSuchFeedError(Error):
     pass
 
 
@@ -29,46 +44,78 @@ def stream(cfg, stream_name):
         mimetype = stream_cfg["mimetype"]
     except KeyError:
         raise Error("stream '{}' is of unknown mimetype".format(mimetype))
+    feeds_cfg = cfg.get('feeds', {})
     stream_type = stream_cfg.get("type")
-    if stream_type == "stream":
-        output = _stream(stream_cfg)  # pass feeds
-    elif stream_type == "shot":
-        output = _shot(stream_cfg)  # pass feeds
-    else:
-        raise Error("stream '{}' is of unknown type".format(stream_name))
+    try:
+        if stream_type == "stream":
+            output = _stream(stream_cfg, feeds_cfg)
+        elif stream_type == "shot":
+            output = _shot(stream_cfg, feeds_cfg)
+        else:
+            raise Error("stream '{}' is of unknown type".format(stream_name))
+    except Exception as e:
+        if isinstance(e, Error):
+            raise
+        else:
+            raise Error(str(e)) from e
     return stream_type, mimetype, output
 
 
-def _stream(stream_cfg):
+def _stream(stream_cfg, feeds_cfg):
     cmd = stream_cfg['command']
 
     def generate():
-        with _global_ctx.feed(cmd) as feed:
-            rpipe = feed.new_reader()
-            print("new feed {}".format(rpipe), file=sys.stderr)
-            try:
-                while feed.is_alive():
-                    chunk = os.read(rpipe, _PIPE_CHUNK_SIZE)
-                    print("  kunky chunk", file=sys.stderr)
-                    if not chunk:
-                        break
-                    yield chunk
-            finally:
-                print("klosing rpipe, connection is going away {}".format(rpipe), file=sys.stderr)
-                os.close(rpipe)
+        with _feed_for_stream(stream_cfg, feeds_cfg) as feed:
+            with _global_ctx.feed(cmd, feed) as stream:
+                stream_rpipe = stream.new_reader()
+                try:
+                    while stream.is_alive():
+                        chunk = os.read(stream_rpipe, _PIPE_CHUNK_SIZE)
+                        if not chunk:
+                            break
+                        yield chunk
+                finally:
+                    os.close(stream_rpipe)
     return generate()
 
 
-def _shot(stream_cfg):
-    cmd = stream_cfg['command']
-    p = subprocess.Popen(cmd, stdin=None, stdout=subprocess.PIPE,
-                         stderr=subprocess.PIPE, close_fds=True, shell=True)
-    stdout, stderr = p.communicate()
-    ec = p.wait()
-    if ec == 0:
-        return stdout
-    else:
-        raise Error(stderr.decode('utf-8', 'replace'))
+def _shot(stream_cfg, feeds_cfg):
+    cmd = shlex.split(stream_cfg['command'])
+    with _feed_for_stream(stream_cfg, feeds_cfg) as feed:
+        stdin = None
+        if feed:
+            stdin = feed.new_reader()
+        try:
+            p = subprocess.Popen(cmd, stdin=stdin, stdout=subprocess.PIPE,
+                                 stderr=subprocess.PIPE, close_fds=True)
+        finally:
+            if stdin is not None:
+                os.close(stdin)
+        stdout, stderr = p.communicate()
+        ec = p.wait()
+        if ec == 0:
+            return stdout
+        else:
+            raise Error(stderr.decode('utf-8', 'replace'))
+
+
+def _feed_for_stream(stream_cfg, feeds_cfg):
+    feed_name = stream_cfg.get('feed')
+    if not feed_name:
+        return _null_feed
+    try:
+        feed_cfg = feeds_cfg[feed_name]
+    except KeyError:
+        raise NoSuchFeedError("feed '{}' cannot be found".format(feed_name))
+    return _feed(feed_cfg)
+
+
+def _feed(feed_cfg):
+    command = feed_cfg['command']
+    mode = feed_cfg.get('mode', 'on-demand')
+    if isinstance(mode, str):
+        mode = mode.lower()
+    return _global_ctx.feed(command, mode=mode)
 
 
 @atexit.register
@@ -81,13 +128,17 @@ class _GlobalContext:
         self._feeds = {}
         self._feed_lock = threading.Lock()
 
-    def feed(self, cmd):
+    def feed(self, cmd, input_feed=None, mode="on-demand"):
         with self._feed_lock:
-            feed_id = ' '.join(cmd)
+            feed_id = cmd
             feed = self._feeds.get(feed_id)
             if feed is None:
-                feed = _Feed(cmd)
+                feed = _Feed(cmd, input_feed, mode=mode)
                 self._feeds[feed_id] = feed
+            if input_feed is not feed.input_feed:
+                raise FeedReuseError("with a different input feed", feed_id)
+            if mode != feed.mode:
+                raise FeedReuseError("with a different mode", feed_id)
             return feed
 
     def close(self):
@@ -98,7 +149,11 @@ class _GlobalContext:
 
 
 class _Feed:
-    def __init__(self, cmd):
+    def __init__(self, cmd, input_feed, mode="on-demand"):
+        if not self._is_mode_valid(mode):
+            raise Error("invalid mode '{}'".format(mode))
+        self.input_feed = input_feed
+        self.mode = mode
         self._acquired = 0
         self._lock = threading.Lock()
         self._process = None
@@ -106,7 +161,7 @@ class _Feed:
         self._cmd = cmd
         self._buffer = None
         self._thread = None
-        self._closed = False
+        self._closed = True
 
     def new_reader(self):
         return self._buffer.new_reader()
@@ -115,18 +170,51 @@ class _Feed:
         p = self._process
         return p is not None and p.poll() is None
 
+    def open(self):
+        with self._lock:
+            if self._acquired == 0:
+                if self._closed:
+                    self._open()
+            self._acquired += 1
+
+    def close(self):
+        with self._lock:
+            self._acquired -= 1
+            if self._acquired <= 0:
+                if self.mode == "on-demand":
+                    self._close()
+                elif isinstance(self.mode, (int, float)):
+                    t = threading.Thread(target=self._delayed_close, args=(self.mode,))
+                    t.daemon = True
+                    t.start()
+
+    def _delayed_close(self, delay):
+        time.sleep(delay)
+        with self._lock:
+            if self._acquired <= 0:
+                self._close()
+
     def _open(self):
-        self._closed = False
-        self._buffer = _MultiClientBuffer()
-        self._rpipe, wpipe = os.pipe()
+        cmd = shlex.split(self._cmd)
+        feed_rpipe = None
+        wpipe = None
         try:
+            self._rpipe, wpipe = os.pipe()
+            self._buffer = _MultiClientBuffer()
+            if self.input_feed:
+                feed_rpipe = self.input_feed.new_reader()
             try:
                 # TODO please, dont devnull stderr
                 self._process = subprocess.Popen(
-                    self._cmd, stdin=None, stdout=wpipe,
-                    stderr=subprocess.DEVNULL, close_fds=True, shell=True)
+                    cmd, stdin=feed_rpipe, stdout=wpipe,
+                    stderr=subprocess.DEVNULL, close_fds=True)
             finally:
+                if feed_rpipe is not None:
+                    os.close(feed_rpipe)
+                    feed_rpipe = None
                 os.close(wpipe)
+                wpipe = None
+            self._closed = False
             thread = threading.Thread(target=self._buffer_loop)
             thread.daemon = True
             thread.start()
@@ -134,6 +222,11 @@ class _Feed:
         except BaseException:
             self._close()
             raise
+        finally:
+            if feed_rpipe is not None:
+                os.close(feed_rpipe)
+            if wpipe is not None:
+                os.close(wpipe)
 
     def _close(self):
         self._buffer.close()
@@ -171,18 +264,15 @@ class _Feed:
         self._buffer.close()
         # TODO respawn?
 
+    def _is_mode_valid(self, mode):
+        return mode in ["continuous", "on-demand"] or isinstance(mode, (float, int))
+
     def __enter__(self):
-        with self._lock:
-            if self._acquired == 0:
-                self._open()
-            self._acquired += 1
+        self.open()
         return self
 
     def __exit__(self, *args):
-        with self._lock:
-            self._acquired -= 1
-            if self._acquired <= 0:
-                self._close()
+        self.close()
 
 
 class _MultiClientBuffer:
@@ -221,4 +311,15 @@ class _MultiClientBuffer:
             self._pipes = []
 
 
+class _NullFeed:
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        pass
+
+    def __bool__(self):
+        return False
+
+_null_feed = _NullFeed()
 _global_ctx = _GlobalContext()

@@ -21,6 +21,7 @@ def stream(name):
     except piping.NoSuchStreamError as e:
         flask.abort(404)
     except piping.Error as e:
+        app.logger.exception(e)
         return flask.make_response("<pre>{}</pre>".format(
             flask.escape(str(e))), 500)
     else:
