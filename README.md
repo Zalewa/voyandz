@@ -60,3 +60,9 @@ recommended for Python and Flask projects.
   |- sandbox - development scraps, experiments
   \- voyandz - application code
 ```
+
+Name
+====
+
+V stands for Video, A stands for Audio, ff implies purpose.
+The rest is gibberish. Short name is `voyandz`, all lower-case.
