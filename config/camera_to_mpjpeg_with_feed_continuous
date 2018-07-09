@@ -1,0 +1,52 @@
+# This configuration file will try to read input from
+# a V4L2 camera and output it as mpjpeg stream of pictures
+# on the 'camera' stream and as a singular screenshot on
+# 'camera_pic' shot-stream.
+#
+# It prevents the EBUSY error by creating an intermediary
+# feed stream that connects to the device ONLY ONCE and, well,
+# feeds the actual streams that are delivered to the clients.
+# The amount of possible connections should now only be limited
+# by hardware and kernel.
+#
+# Feed here will be continous - the feed will be drained
+# from the input device even if no one needs this. This
+# mode should improve response times for new connections
+# when streams had no prior connections and may need to
+# be used with devices that dislike disconnections.
+
+## IP address on which the server will be listening.
+listenaddr: '0.0.0.0'
+
+## Network port on which the server will be listening.
+listenport: 8090
+
+## Feeds
+feeds:
+  camera:
+    command: ffmpeg -i /dev/video0 -f image2pipe -vcodec bmp -r 15 -
+    mode: continuous
+
+## Streams
+streams:
+  camera:
+    command: >
+      ffmpeg -f bmp_pipe -vcodec bmp -r 15 -i -
+        -f mpjpeg -qmin 1 -qmax 6 -r 15 -
+    type: stream
+    mimetype: multipart/x-mixed-replace;boundary=ffserver
+    feed: camera  # this feed name must match to the actual feed name
+  camera_pic:
+    command: >
+      ffmpeg -probesize 32000000 -analyzeduration 10000000 -f bmp_pipe -vcodec bmp -r 15 -i -
+        -f image2pipe -vcodec png -vframes 1 -
+    type: shot
+    mimetype: image/png
+    feed: camera  # this feed name must match to the actual feed name
+
+## Extra pages
+pages:
+  ## Dump config at /cfg
+  config: false
+  ## Dump statistics at /stat
+  stat: true

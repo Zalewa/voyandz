@@ -134,7 +134,13 @@ Feeds should be configurable as:
 * On-demand - in this mode the feed will only be activated when
   at least one connection to a stream configured to use this feed
   is opened. When all related connections are closed, the feed
-  must also be closed.
+  must also be closed. This is the default mode.
+
+* Timeout - in this mode the feed will remain alive for a limited
+  amount of time even if no one is using it. This mode can minimize
+  delays in cases where screenshots are captured rapidly. Timeout
+  mode doesn't need to be specified explicitly as a "timeout" keyword,
+  but as a number of seconds.
 
 When more than one stream needs a single feed, this single feed must be
 used for all streams. The new stream cannot open a duplicate feed.
