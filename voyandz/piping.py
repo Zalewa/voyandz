@@ -269,9 +269,12 @@ class _Feed:
 
     def _buffer_loop(self):
         while not self._closed and self.is_alive():
-            rpipes, _, _ = select([self._rpipe], [], [], 1.0)
+            rpipe = self._rpipe
+            if not rpipe:
+                break
+            rpipes, _, _ = select([rpipe], [], [], 1.0)
             if rpipes:
-                chunk = os.read(self._rpipe, _PIPE_CHUNK_SIZE)
+                chunk = os.read(rpipe, _PIPE_CHUNK_SIZE)
                 if not chunk:
                     break
                 self._buffer.write(chunk)
