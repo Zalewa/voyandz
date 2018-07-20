@@ -1,4 +1,6 @@
 # coding: utf-8
+from .logging import logopen
+
 from select import select
 import atexit
 import errno
@@ -48,7 +50,7 @@ def stream(cfg, stream_name):
     stream_type = stream_cfg.get("type")
     try:
         if stream_type == "stream":
-            output = _stream(stream_name, stream_cfg, feeds_cfg)
+            output = _stream(stream_name, stream_cfg, feeds_cfg, cfg.get('logdir'))
         elif stream_type == "shot":
             output = _shot(stream_cfg, feeds_cfg)
         else:
@@ -61,13 +63,14 @@ def stream(cfg, stream_name):
     return stream_type, mimetype, output
 
 
-def _stream(stream_name, stream_cfg, feeds_cfg):
+def _stream(stream_name, stream_cfg, feeds_cfg, logdir):
     cmd = stream_cfg['command']
-    stream_id = "stream/{}".format(stream_name)
+    stream_id = "stream_{}".format(stream_name)
 
     def generate():
-        with _feed_for_stream(stream_cfg, feeds_cfg) as feed:
-            with _global_ctx.feed(stream_id, cmd, feed) as stream:
+        with _feed_for_stream(stream_cfg, feeds_cfg, logdir=logdir) as feed:
+            with _global_ctx.feed(stream_id, cmd, feed,
+                                  logdir=logdir) as stream:
                 stream_rpipe = stream.new_reader()
                 try:
                     while stream.is_alive():
@@ -82,7 +85,7 @@ def _stream(stream_name, stream_cfg, feeds_cfg):
 
 def _shot(stream_cfg, feeds_cfg):
     cmd = shlex.split(stream_cfg['command'])
-    with _feed_for_stream(stream_cfg, feeds_cfg) as feed:
+    with _feed_for_stream(stream_cfg, feeds_cfg, logdir=stream_cfg.get('logdir')) as feed:
         stdin = None
         if feed:
             stdin = feed.new_reader()
@@ -100,7 +103,7 @@ def _shot(stream_cfg, feeds_cfg):
             raise Error(stderr.decode('utf-8', 'replace'))
 
 
-def _feed_for_stream(stream_cfg, feeds_cfg):
+def _feed_for_stream(stream_cfg, feeds_cfg, logdir):
     feed_name = stream_cfg.get('feed')
     if not feed_name:
         return _null_feed
@@ -108,16 +111,16 @@ def _feed_for_stream(stream_cfg, feeds_cfg):
         feed_cfg = feeds_cfg[feed_name]
     except KeyError:
         raise NoSuchFeedError("feed '{}' cannot be found".format(feed_name))
-    return _feed(feed_name, feed_cfg)
+    return _feed(feed_name, feed_cfg, logdir=logdir)
 
 
-def _feed(feed_name, feed_cfg):
+def _feed(feed_name, feed_cfg, logdir):
     command = feed_cfg['command']
     mode = feed_cfg.get('mode', 'on-demand')
     if isinstance(mode, str):
         mode = mode.lower()
-    return _global_ctx.feed("feed/{}".format(feed_name),
-                            command, mode=mode)
+    return _global_ctx.feed("feed_{}".format(feed_name),
+                            command, mode=mode, logdir=logdir)
 
 
 @atexit.register
@@ -130,11 +133,13 @@ class _GlobalContext:
         self._feeds = {}
         self._feed_lock = threading.Lock()
 
-    def feed(self, feed_id, cmd, input_feed=None, mode="on-demand"):
+    def feed(self, feed_id, cmd, input_feed=None, mode="on-demand",
+             logdir=None):
         with self._feed_lock:
             feed = self._feeds.get(feed_id)
             if feed is None:
-                feed = _Feed(cmd, input_feed, mode=mode)
+                feed = _Feed(feed_id, cmd, input_feed, mode=mode,
+                             logdir=logdir)
                 self._feeds[feed_id] = feed
             if input_feed is not feed.input_feed:
                 raise FeedReuseError("with a different input feed", feed_id)
@@ -150,11 +155,14 @@ class _GlobalContext:
 
 
 class _Feed:
-    def __init__(self, cmd, input_feed, mode="on-demand"):
+    def __init__(self, feed_id, cmd, input_feed, mode="on-demand",
+                 logdir=None):
         if not self._is_mode_valid(mode):
             raise Error("invalid mode '{}'".format(mode))
         self.input_feed = input_feed
         self.mode = mode
+        self._feed_id = feed_id
+        self._logdir = logdir
         self._acquired = 0
         self._lock = threading.Lock()
         self._process = None
@@ -205,11 +213,17 @@ class _Feed:
             if self.input_feed:
                 feed_rpipe = self.input_feed.new_reader()
             try:
-                # TODO please, dont devnull stderr
+                if self._logdir:
+                    logfile = logopen(self._logdir,
+                                      "{}.log".format(self._feed_id))
+                else:
+                    logfile = subprocess.DEVNULL
                 self._process = subprocess.Popen(
                     cmd, stdin=feed_rpipe, stdout=wpipe,
-                    stderr=subprocess.DEVNULL, close_fds=True)
+                    stderr=logfile, close_fds=True)
             finally:
+                if logfile != subprocess.DEVNULL:
+                    logfile.close()
                 if feed_rpipe is not None:
                     os.close(feed_rpipe)
                     feed_rpipe = None
