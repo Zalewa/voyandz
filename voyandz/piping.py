@@ -48,7 +48,7 @@ def stream(cfg, stream_name):
     stream_type = stream_cfg.get("type")
     try:
         if stream_type == "stream":
-            output = _stream(stream_cfg, feeds_cfg)
+            output = _stream(stream_name, stream_cfg, feeds_cfg)
         elif stream_type == "shot":
             output = _shot(stream_cfg, feeds_cfg)
         else:
@@ -61,12 +61,13 @@ def stream(cfg, stream_name):
     return stream_type, mimetype, output
 
 
-def _stream(stream_cfg, feeds_cfg):
+def _stream(stream_name, stream_cfg, feeds_cfg):
     cmd = stream_cfg['command']
+    stream_id = "stream/{}".format(stream_name)
 
     def generate():
         with _feed_for_stream(stream_cfg, feeds_cfg) as feed:
-            with _global_ctx.feed(cmd, feed) as stream:
+            with _global_ctx.feed(stream_id, cmd, feed) as stream:
                 stream_rpipe = stream.new_reader()
                 try:
                     while stream.is_alive():
@@ -107,15 +108,16 @@ def _feed_for_stream(stream_cfg, feeds_cfg):
         feed_cfg = feeds_cfg[feed_name]
     except KeyError:
         raise NoSuchFeedError("feed '{}' cannot be found".format(feed_name))
-    return _feed(feed_cfg)
+    return _feed(feed_name, feed_cfg)
 
 
-def _feed(feed_cfg):
+def _feed(feed_name, feed_cfg):
     command = feed_cfg['command']
     mode = feed_cfg.get('mode', 'on-demand')
     if isinstance(mode, str):
         mode = mode.lower()
-    return _global_ctx.feed(command, mode=mode)
+    return _global_ctx.feed("feed/{}".format(feed_name),
+                            command, mode=mode)
 
 
 @atexit.register
@@ -128,9 +130,8 @@ class _GlobalContext:
         self._feeds = {}
         self._feed_lock = threading.Lock()
 
-    def feed(self, cmd, input_feed=None, mode="on-demand"):
+    def feed(self, feed_id, cmd, input_feed=None, mode="on-demand"):
         with self._feed_lock:
-            feed_id = cmd
             feed = self._feeds.get(feed_id)
             if feed is None:
                 feed = _Feed(cmd, input_feed, mode=mode)
