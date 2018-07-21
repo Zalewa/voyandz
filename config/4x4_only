@@ -1,0 +1,69 @@
+# Video 4-by-4 matrix example with camera and 3 videos streamed from disk.
+#
+# This example only contains the matrix.
+#
+# https://trac.ffmpeg.org/wiki/Create%20a%20mosaic%20out%20of%20several%20input%20videos
+
+## IP address on which the server will be listening.
+listenaddr: '127.0.0.1'
+
+## Network port on which the server will be listening.
+listenport: 8090
+
+#logdir: /var/log/voyandz
+
+feeds:
+  vid1:
+    command: ffmpeg -re -stream_loop -1 -i /opt/vid/vid1.ts -f rawvideo -
+    mode: continuous
+  vid2:
+    command: ffmpeg -re -stream_loop -1 -i /opt/vid/vid2_short.ts -f rawvideo -
+    mode: continuous
+  bbb:
+    command: ffmpeg -re -stream_loop -1 -i /opt/vid/bbb.ts -f rawvideo -
+    mode: continuous
+
+## Streams
+streams:
+  camera_matrix:
+    command: ffmpeg -i /dev/video0 -f rawvideo -s 176x144 -r 4 -pix_fmt yuv420p -
+    type: stream
+    mimetype: application/octet-stream
+  vid1_matrix:
+    command: ffmpeg -f rawvideo -s 640x360 -i - -f rawvideo -s 176x144 -r 4 -pix_fmt yuv420p -
+    type: stream
+    mimetype: application/octet-stream
+    feed: vid1
+  vid2_matrix:
+    command: ffmpeg -f rawvideo -s 1280x720 -i - -f rawvideo -s 176x144 -r 4 -pix_fmt yuv420p -
+    type: stream
+    mimetype: application/octet-stream
+    feed: vid2
+  bbb_matrix:
+    command: ffmpeg -f rawvideo -s 1920x1080 -i - -f rawvideo -s 176x144 -r 4 -pix_fmt yuv420p -
+    type: stream
+    mimetype: application/octet-stream
+    feed: bbb
+  4x4:
+    command: >-
+      ffmpeg
+      -f rawvideo -analyzeduration 0 -probesize 32 -s 176x144 -r 4 -pix_fmt yuv420p -i http://127.0.0.1:8090/stream/camera_matrix
+      -f rawvideo -analyzeduration 0 -probesize 32 -s 176x144 -r 4 -pix_fmt yuv420p -i http://127.0.0.1:8090/stream/vid1_matrix
+      -f rawvideo -analyzeduration 0 -probesize 32 -s 176x144 -r 4 -pix_fmt yuv420p -i http://127.0.0.1:8090/stream/vid2_matrix
+      -f rawvideo -analyzeduration 0 -probesize 32 -s 176x144 -r 4 -pix_fmt yuv420p -i http://127.0.0.1:8090/stream/bbb_matrix
+      -filter_complex
+      "nullsrc=size=704x576 [base];
+      [base][0:v] overlay=repeatlast=1:y=288 [m1];
+      [m1][1:v] overlay=repeatlast=1:x=176 [m2];
+      [m2][2:v] overlay=repeatlast=1:x=352:y=432 [m3];
+      [m3][3:v] overlay=repeatlast=1:x=528:y=144"
+      -f mpjpeg -qmin 1 -qmax 6 -r 4 -
+    type: stream
+    mimetype: multipart/x-mixed-replace;boundary=ffserver
+
+## Extra pages
+pages:
+  ## Dump config at /cfg
+  config: false
+  ## Dump statistics at /stat
+  stat: true
