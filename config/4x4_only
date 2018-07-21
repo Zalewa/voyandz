@@ -1,6 +1,8 @@
 # Video 4-by-4 matrix example with camera and 3 videos streamed from disk.
+# The other 12 videos are missing here and ffmpeg will generate blank
+# background in their place.
 #
-# This example only contains the matrix.
+# This example only contains the matrix and no extra streams.
 #
 # https://trac.ffmpeg.org/wiki/Create%20a%20mosaic%20out%20of%20several%20input%20videos
 
@@ -14,52 +16,58 @@ listenport: 8090
 
 feeds:
   vid1:
-    command: ffmpeg -re -stream_loop -1 -i /opt/vid/vid1.ts -f rawvideo -
+    command: >
+      ffmpeg -re -stream_loop -1 -i /opt/vid/vid1.ts
+      -f mjpeg -qmin 1 -qmax 6 -s 176x144 -r 4 -
     mode: continuous
   vid2:
-    command: ffmpeg -re -stream_loop -1 -i /opt/vid/vid2_short.ts -f rawvideo -
+    command: >
+      ffmpeg -re -stream_loop -1 -i /opt/vid/vid2.ts
+      -f mjpeg -qmin 1 -qmax 6 -s 176x144 -r 4 -
     mode: continuous
   bbb:
-    command: ffmpeg -re -stream_loop -1 -i /opt/vid/bbb.ts -f rawvideo -
+    command: >
+      ffmpeg -re -stream_loop -1 -i /opt/vid/bbb.ts
+      -f mjpeg -qmin 1 -qmax 6 -s 176x144 -r 4 -
     mode: continuous
 
 ## Streams
 streams:
   camera_matrix:
-    command: ffmpeg -i /dev/video0 -f rawvideo -s 176x144 -r 4 -pix_fmt yuv420p -
+    command: ffmpeg -i /dev/video0 -f mjpeg -qmin 1 -qmax 6 -s 176x144 -r 4 -
     type: stream
-    mimetype: application/octet-stream
+    mimetype: video/x-motion-jpeg
   vid1_matrix:
-    command: ffmpeg -f rawvideo -s 640x360 -i - -f rawvideo -s 176x144 -r 4 -pix_fmt yuv420p -
+    command: cat
     type: stream
-    mimetype: application/octet-stream
+    mimetype: video/x-motion-jpeg
     feed: vid1
   vid2_matrix:
-    command: ffmpeg -f rawvideo -s 1280x720 -i - -f rawvideo -s 176x144 -r 4 -pix_fmt yuv420p -
+    command: cat
     type: stream
-    mimetype: application/octet-stream
+    mimetype: video/x-motion-jpeg
     feed: vid2
   bbb_matrix:
-    command: ffmpeg -f rawvideo -s 1920x1080 -i - -f rawvideo -s 176x144 -r 4 -pix_fmt yuv420p -
+    command: cat
     type: stream
-    mimetype: application/octet-stream
+    mimetype: video/x-motion-jpeg
     feed: bbb
   4x4:
-    command: >-
+    command: >
       ffmpeg
-      -f rawvideo -analyzeduration 0 -probesize 32 -s 176x144 -r 4 -pix_fmt yuv420p -i http://127.0.0.1:8090/stream/camera_matrix
-      -f rawvideo -analyzeduration 0 -probesize 32 -s 176x144 -r 4 -pix_fmt yuv420p -i http://127.0.0.1:8090/stream/vid1_matrix
-      -f rawvideo -analyzeduration 0 -probesize 32 -s 176x144 -r 4 -pix_fmt yuv420p -i http://127.0.0.1:8090/stream/vid2_matrix
-      -f rawvideo -analyzeduration 0 -probesize 32 -s 176x144 -r 4 -pix_fmt yuv420p -i http://127.0.0.1:8090/stream/bbb_matrix
+      -an -r 4 -analyzeduration 10 -probesize 512 -f mjpeg -i http://127.0.0.1:8090/stream/camera_matrix
+      -an -r 4 -analyzeduration 10 -probesize 512 -f mjpeg -i http://127.0.0.1:8090/stream/vid1_matrix
+      -an -r 4 -analyzeduration 10 -probesize 512 -f mjpeg -i http://127.0.0.1:8090/stream/vid2_matrix
+      -an -r 4 -analyzeduration 10 -probesize 512 -f mjpeg -i http://127.0.0.1:8090/stream/bbb_matrix
       -filter_complex
       "nullsrc=size=704x576 [base];
       [base][0:v] overlay=repeatlast=1:y=288 [m1];
       [m1][1:v] overlay=repeatlast=1:x=176 [m2];
       [m2][2:v] overlay=repeatlast=1:x=352:y=432 [m3];
       [m3][3:v] overlay=repeatlast=1:x=528:y=144"
-      -f mpjpeg -qmin 1 -qmax 6 -r 4 -
+      -f mpjpeg -qmin 1 -qmax 6 -r 4 -boundary_tag ffmpeg -
     type: stream
-    mimetype: multipart/x-mixed-replace;boundary=ffserver
+    mimetype: multipart/x-mixed-replace;boundary=ffmpeg
 
 ## Extra pages
 pages:
