@@ -1,0 +1,43 @@
+# Minimal ("zero") latency stream using NVidia hardware encoder.
+# UHD example, because why the heck not.
+
+## IP address on which the server will be listening.
+listenaddr: '127.0.0.1'
+
+## Network port on which the server will be listening.
+listenport: 8090
+
+#logdir: /var/log/voyandz
+
+feeds:
+  camera:
+    command: >
+      ffmpeg -i /dev/video0 -f mpegts -s 3840x2160 -r 60
+      -vcodec h264_nvenc -b:v 20M -minrate 20M -maxrate 20M -bufsize 21M
+      -preset ll -rc cbr -cbr 1 -b_adapt 0 -g 10 -strict_gop 1 -delay 0 -zerolatency 1 -
+    mode: on-demand
+
+## Streams
+streams:
+  camera_browser:
+    command: ffmpeg -analyzeduration 150000 -f mpegts -i - -f mpjpeg -vcodec mjpeg -qmin 1 -qmax 6 -r 15 -s 4cif -
+    type: stream
+    mimetype: multipart/x-mixed-replace;boundary=ffserver
+    feed: camera
+  camera_record:
+    command: cat
+    type: stream
+    mimetype: video/mp2t
+    feed: camera
+  camera_pic:
+    command: ffmpeg -analyzeduration 150000 -i - -f image2pipe -vcodec png -vframes 1 -
+    type: shot
+    mimetype: image/png
+    feed: camera
+
+## Extra pages
+pages:
+  ## Dump config at /cfg
+  config: false
+  ## Dump statistics at /stat
+  stat: true

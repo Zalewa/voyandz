@@ -1,0 +1,39 @@
+# Minimal ("zero") latency stream using lix264 software encoder.
+
+## IP address on which the server will be listening.
+listenaddr: '127.0.0.1'
+
+## Network port on which the server will be listening.
+listenport: 8090
+
+#logdir: /var/log/voyandz
+
+feeds:
+  camera:
+    command: ffmpeg -i /dev/video0 -f mpegts -vcodec libx264 -x264opts "keyint=3:min-keyint=3:bitrate=10000:vbv-bufsize=11000:vbv-maxrate=10000" -tune zerolatency -preset ultrafast -s 1280x720 -r 30 -
+    mode: 5
+
+## Streams
+streams:
+  camera_browser:
+    command: ffmpeg -analyzeduration 200000 -f mpegts -i - -f mpjpeg -vcodec mjpeg -qmin 1 -qmax 6 -r 15 -s 4cif -
+    type: stream
+    mimetype: multipart/x-mixed-replace;boundary=ffserver
+    feed: camera
+  camera_record:
+    command: cat
+    type: stream
+    mimetype: video/mp2t
+    feed: camera
+  camera_pic:
+    command: ffmpeg -analyzeduration 200000 -i - -f image2pipe -vcodec png -vframes 1 -
+    type: shot
+    mimetype: image/png
+    feed: camera
+
+## Extra pages
+pages:
+  ## Dump config at /cfg
+  config: false
+  ## Dump statistics at /stat
+  stat: true
