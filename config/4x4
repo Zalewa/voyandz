@@ -1,6 +1,10 @@
 # Video 4-by-4 matrix example with camera and 3 videos streamed from disk.
+# The other 12 videos are missing here and ffmpeg will generate blank
+# background in their place.
 #
-# This example also contains separate streams for each feed.
+# This example also contains separate streams for each feed allow
+# to watch the streams separately in different resolutions and
+# grab HQ screenshots.
 #
 # https://trac.ffmpeg.org/wiki/Create%20a%20mosaic%20out%20of%20several%20input%20videos
 
@@ -12,92 +16,104 @@ listenport: 8090
 
 #logdir: /var/log/voyandz
 
+## Feeds
 feeds:
   vid1:
-    command: ffmpeg -re -stream_loop -1 -i /opt/vid/vid1.ts -f rawvideo -
+    command: >
+      ffmpeg -re -stream_loop -1 -i /opt/vid/vid1.ts
+      -f mjpeg -qmin 1 -qmax 6 -
     mode: continuous
   vid2:
-    command: ffmpeg -re -stream_loop -1 -i /opt/vid/vid2_short.ts -f rawvideo -
+    command: >
+      ffmpeg -re -stream_loop -1 -i /opt/vid/vid2.ts
+      -f mjpeg -qmin 1 -qmax 6 -
     mode: continuous
   bbb:
-    command: ffmpeg -re -stream_loop -1 -i /opt/vid/bbb.ts -f rawvideo -
+    command: >
+      ffmpeg -re -stream_loop -1 -i /opt/vid/bbb.ts
+      -f mjpeg -qmin 1 -qmax 6 -
     mode: continuous
 
 ## Streams
 streams:
+  ## camera
   camera:
-    command: ffmpeg -i /dev/video0 -f mpjpeg -qmin 1 -qmax 6 -r 15 -
+    command: ffmpeg -i /dev/video0 -f mpjpeg -qmin 1 -qmax 6 -r 15 -boundary_tag ffmpeg -
     type: stream
-    mimetype: multipart/x-mixed-replace;boundary=ffserver
+    mimetype: multipart/x-mixed-replace;boundary=ffmpeg
   camera_pic:
     command: ffmpeg -i /dev/video0 -f image2pipe -vcodec png -vframes 1 -
     type: shot
     mimetype: image/png
   camera_matrix:
-    command: ffmpeg -i /dev/video0 -f rawvideo -s 176x144 -r 4 -pix_fmt yuv420p -
+    command: ffmpeg -i /dev/video0 -f mjpeg -qmin 1 -qmax 6 -s 176x144 -r 4 -
     type: stream
-    mimetype: application/octet-stream
+    mimetype: video/x-motion-jpeg
+  ## vid1
   vid1:
-    command: ffmpeg -f rawvideo -s 640x360 -i - -f mpjpeg -qmin 1 -qmax 6 -r 15 -
+    command: ffmpeg -i - -f mpjpeg -qmin 1 -qmax 6 -r 15 -boundary_tag ffmpeg -
     type: stream
-    mimetype: multipart/x-mixed-replace;boundary=ffserver
+    mimetype: multipart/x-mixed-replace;boundary=ffmpeg
     feed: vid1
   vid1_pic:
-    command: ffmpeg -f rawvideo -s 640x360 -i - -f image2pipe -vcodec png -vframes 1 -
+    command: ffmpeg -i - -f image2pipe -vcodec png -vframes 1 -
     type: shot
     mimetype: image/png
     feed: vid1
   vid1_matrix:
-    command: ffmpeg -f rawvideo -s 640x360 -i - -f rawvideo -s 176x144 -r 4 -pix_fmt yuv420p -
+    command: ffmpeg -i - -f mjpeg -qmin 1 -qmax 6 -s 176x144 -r 4 -
     type: stream
-    mimetype: application/octet-stream
+    mimetype: video/x-motion-jpeg
     feed: vid1
+  ## vid2
   vid2:
-    command: ffmpeg -f rawvideo -s 1280x720 -i - -f mpjpeg -qmin 1 -qmax 6 -r 15 -
+    command: ffmpeg -i - -f mpjpeg -qmin 1 -qmax 6 -r 15 -boundary_tag ffmpeg -
     type: stream
-    mimetype: multipart/x-mixed-replace;boundary=ffserver
+    mimetype: multipart/x-mixed-replace;boundary=ffmpeg
     feed: vid2
   vid2_pic:
-    command: ffmpeg -f rawvideo -s 1280x720 -i - -f image2pipe -vcodec png -vframes 1 -
+    command: ffmpeg -i - -f image2pipe -vcodec png -vframes 1 -
     type: shot
     mimetype: image/png
     feed: vid2
   vid2_matrix:
-    command: ffmpeg -f rawvideo -s 1280x720 -i - -f rawvideo -s 176x144 -r 4 -pix_fmt yuv420p -
+    command: ffmpeg -i - -f mjpeg -qmin 1 -qmax 6 -s 176x144 -r 4 -
     type: stream
-    mimetype: application/octet-stream
+    mimetype: video/x-motion-jpeg
     feed: vid2
+  ## bbb
   bbb:
-    command: ffmpeg -f rawvideo -s 1920x1080 -i - -f mpjpeg -qmin 1 -qmax 6 -r 15 -
+    command: ffmpeg -i - -f mpjpeg -qmin 1 -qmax 6 -r 3 -boundary_tag ffmpeg -
     type: stream
-    mimetype: multipart/x-mixed-replace;boundary=ffserver
+    mimetype: multipart/x-mixed-replace;boundary=ffmpeg
     feed: bbb
   bbb_pic:
-    command: ffmpeg -f rawvideo -s 1920x1080 -i - -f image2pipe -vcodec png -vframes 1 -
+    command: ffmpeg -i - -f image2pipe -vcodec png -vframes 1 -
     type: shot
     mimetype: image/png
     feed: bbb
   bbb_matrix:
-    command: ffmpeg -f rawvideo -s 1920x1080 -i - -f rawvideo -s 176x144 -r 4 -pix_fmt yuv420p -
+    command: ffmpeg -i - -f mjpeg -qmin 1 -qmax 6 -s 176x144 -r 4 -
     type: stream
-    mimetype: application/octet-stream
+    mimetype: video/x-motion-jpeg
     feed: bbb
+  ## 4x4
   4x4:
     command: >-
       ffmpeg
-      -f rawvideo -analyzeduration 0 -probesize 32 -s 176x144 -r 4 -pix_fmt yuv420p -i http://127.0.0.1:8090/stream/camera_matrix
-      -f rawvideo -analyzeduration 0 -probesize 32 -s 176x144 -r 4 -pix_fmt yuv420p -i http://127.0.0.1:8090/stream/vid1_matrix
-      -f rawvideo -analyzeduration 0 -probesize 32 -s 176x144 -r 4 -pix_fmt yuv420p -i http://127.0.0.1:8090/stream/vid2_matrix
-      -f rawvideo -analyzeduration 0 -probesize 32 -s 176x144 -r 4 -pix_fmt yuv420p -i http://127.0.0.1:8090/stream/bbb_matrix
+      -an -r 4 -analyzeduration 10 -probesize 512 -f mjpeg -i http://127.0.0.1:8090/stream/camera_matrix
+      -an -r 4 -analyzeduration 10 -probesize 512 -f mjpeg -i http://127.0.0.1:8090/stream/vid1_matrix
+      -an -r 4 -analyzeduration 10 -probesize 512 -f mjpeg -i http://127.0.0.1:8090/stream/vid2_matrix
+      -an -r 4 -analyzeduration 10 -probesize 512 -f mjpeg -i http://127.0.0.1:8090/stream/bbb_matrix
       -filter_complex
       "nullsrc=size=704x576 [base];
       [base][0:v] overlay=repeatlast=1 [m1];
       [m1][1:v] overlay=repeatlast=1:x=176 [m2];
       [m2][2:v] overlay=repeatlast=1:x=352 [m3];
       [m3][3:v] overlay=repeatlast=1:x=528"
-      -f mpjpeg -qmin 1 -qmax 6 -r 4 -
+      -f mpjpeg -qmin 1 -qmax 6 -r 4 -boundary_tag ffmpeg -
     type: stream
-    mimetype: multipart/x-mixed-replace;boundary=ffserver
+    mimetype: multipart/x-mixed-replace;boundary=ffmpeg
 
 ## Extra pages
 pages:
