@@ -121,6 +121,9 @@ Feeds
 
 Feeds are input pipes where the source material will come *in*.
 
+Feeds are uniquely identified by their names. There can't be
+more than one feed with the same name.
+
 Feeds can be defined as:
 
 * A path to a file (including a named pipe).
@@ -129,7 +132,9 @@ Feeds can be defined as:
 Feeds should be configurable as:
 
 * Continuous - in this mode the feed will be always active, draining
-  resources even if there's no one using it.
+  resources even if there's no one using it. This mode is useful
+  when the input source doesn't handle disconnections or subsequent
+  reconnections very well.
 
 * On-demand - in this mode the feed will only be activated when
   at least one connection to a stream configured to use this feed
@@ -140,7 +145,7 @@ Feeds should be configurable as:
   amount of time even if no one is using it. This mode can minimize
   delays in cases where screenshots are captured rapidly. Timeout
   mode doesn't need to be specified explicitly as a "timeout" keyword,
-  but as a number of seconds.
+  but as a number of seconds (int).
 
 When more than one stream needs a single feed, this single feed must be
 used for all streams. The new stream cannot open a duplicate feed.
@@ -162,6 +167,9 @@ Streams
 
 Streams are output pipes where target material will come *out*, possibly
 going through a re-encoding process before.
+
+Streams are uniquely identified by their names. There can't be
+more than one stream with the same name.
 
 Streams can be audio only, video only or audio and video muxed together.
 
@@ -185,45 +193,44 @@ it should be possible to define a feed-less stream.
 Clients connect to streams through HTTP URLs. Voyandz configuration
 determines what are the paths for those URLs. URL paths can be
 arbitrary, have multiple parts and must be configurable by the user.
+By default, the URLs should begin with '/stream/' and continue
+with the stream name.
 
 Many independent connections can use a single stream. In such
 case the data created for that stream should only be created
 once and sent to each connection. This means that some connections
 can receive partial data and clients need to be prepared for that.
 
-The container of the stream must be suitable for streaming.
-
-Clients should be able to connect at any time, potentially
-receiving gibberish at the beginning.
-
-If client is incapable of accepting gibberish, it should
-be allowed for this client to specify a parameter in URL
-query demanding from voyandz to provide a proper header.
-
-Another URL query parameter should demand to start streaming
-from an intra-frame. Audio-only streams can ignore that.
+Unfortunately, it may be necessary to stream formats that only contain
+the content meta-data at the beginning of the stream and this meta-data
+is never repeated afterwards. In such case, it should be allowed to
+define the stream as 'client: exclusive'. In this mode, each new
+client connection will create a new stream with the same name and
+command and only this one client will receive data produced by this
+stream. When container of the stream is suitable for clients joining
+in the middle, the default setting of 'client: shared' should be used.
+In 'shared' mode, clients should be able to connect at any time,
+potentially receiving gibberish at the beginning.
 
 
 Screenshots
 -----------
 
 Video streams should provide a capability of grabbing
-current frame as a screenshot. Screenshot must be
+current feed frame as a screenshot. Screenshot must be
 sent to the client directly through its connection,
 and then the connection must be closed.
 
-URL to grab a screenshot is the URL to the video stream
-with extra path parameter called "pic", ie. "/video0.ts/pic".
+Screenshots are essentially "Streams" with 'type: shot'
+and mimetype appropriate for the produced picture.
 
-Screenshots can be taken in PNG or JPG formats.
+Server configuration determines the "mimetype" of the picture.
 
-JPG format should allow to specify quality in percents,
-with 85% being the default.
-
-It is undesirable, but allowed, to only provide a screenshot
-when the next intra-frame occurs. Client will need to wait.
-
-Audio-only streams must end the connection with error 415.
+"command" parameter of the screenshot stream must be expected
+to produce a singular picture already in the chosen "mimetype".
+This command must then end gracefully with `exitcode` `0`.
+If `exitcode != 0` then `stderr` of the command is returned
+to the client alongside error 500.
 
 
 Status Page
@@ -275,7 +282,7 @@ Voyandz should be configurable through a plain-text YAML file.
 
 It should be possible to specify the path to this file through
 a `-f` command-line argument. If unspecified, the default configuration
-should be seeked in `/etc/voyandz.ini`.
+should be seeked in `/etc/voyandz`.
 
 Configuration should support a templating system, minimizing duplication.
 Templates should include:
