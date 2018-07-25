@@ -1,18 +1,21 @@
 # coding: utf-8
 from .logging import logopen
 
-from select import select
 import atexit
 import errno
 import os
 import threading
 import time
+import select
 import shlex
 import subprocess
+import sys
 
 
 # TODO optimal read size?
-_PIPE_CHUNK_SIZE = 10240
+_PIPE_CHUNK_SIZE = select.PIPE_BUF
+_FEED_RPIPE_TIMEOUT = 1.0
+_CLIENT_WPIPE_TIMEOUT = 1.0
 
 
 class Error(Exception):
@@ -74,6 +77,7 @@ def _stream(stream_name, stream_cfg, feeds_cfg, logdir):
                 stream_rpipe = stream.new_reader()
                 try:
                     while stream.is_alive():
+                        #print("reading chunk for stream '{}'".format(stream_id), file=sys.stderr) # TODO XXX
                         chunk = os.read(stream_rpipe, _PIPE_CHUNK_SIZE)
                         if not chunk:
                             break
@@ -173,6 +177,7 @@ class _Feed:
         self._closed = True
 
     def new_reader(self):
+        print("creating new pipe set for feed {}".format(self._feed_id), file=sys.stderr) # TODO XXX
         return self._buffer.new_reader()
 
     def is_alive(self):
@@ -272,12 +277,14 @@ class _Feed:
             rpipe = self._rpipe
             if not rpipe:
                 break
-            rpipes, _, _ = select([rpipe], [], [], 1.0)
+            rpipes, _, _ = select.select([rpipe], [], [], _FEED_RPIPE_TIMEOUT)
             if rpipes:
                 chunk = os.read(rpipe, _PIPE_CHUNK_SIZE)
                 if not chunk:
                     break
+                #print("writing chunk to buffer '{}'".format(self._feed_id), file=sys.stderr) # TODO XXX
                 self._buffer.write(chunk)
+                #print("written '{}'".format(self._feed_id)) # TODO XXX
         # This will break all connections and effectively close the feed.
         self._buffer.close()
         # TODO respawn?
@@ -295,7 +302,7 @@ class _Feed:
 
 class _MultiClientBuffer:
     def __init__(self):
-        self._pipes = []
+        self._pipes = {}
         self._pipes_lock = threading.Lock()
         self._closed = False
 
@@ -304,29 +311,88 @@ class _MultiClientBuffer:
             if self._closed:
                 raise IOError(errno.EIO, "already closed")
             rpipe, wpipe = os.pipe()
-            self._pipes.append(wpipe)
+            print("\tcreated pipeset r={}, w={}".format(rpipe, wpipe), file=sys.stderr) # TODO XXX
+            #os.set_blocking(wpipe, False)
+            self._pipes[wpipe] = _PipeBuffer(wpipe)
             return rpipe
 
     def write(self, chunk):
         if self._closed:
             return
+        # Select pipes to write to.
         with self._pipes_lock:
-            pipes = list(self._pipes)
-        for wpipe in pipes:
+            pipes = dict(self._pipes)
+        if not pipes:
+            return
+        _, ready_pipes, _ = select.select([], list(pipes.keys()), [], _CLIENT_WPIPE_TIMEOUT)
+        unready_pipes = [pipe for pipe in pipes if pipe not in ready_pipes]
+        if unready_pipes:
+            print("ready {}, unready {}".format(ready_pipes, unready_pipes), file=sys.stderr) # TODO XXX
+        kill_pipes = set()
+        # Write to ready pipes.
+        for wpipe in ready_pipes:
+            pipebuf = pipes.get(wpipe)
             try:
-                os.write(wpipe, chunk)
+                #print("WRITING {}, {}".format(wpipe, len(chunk)), file=sys.stderr) # TODO XXX
+                written = pipebuf.write(chunk)
+                #print("WRITTEN {}, {}".format(wpipe, written), file=sys.stderr) # TODO XXX
             except IOError:
-                with self._pipes_lock:
+                print("IOIO on wpipe {}".format(wpipe), file=sys.stderr) # TODO XXX
+                kill_pipes.add(wpipe)
+        # Buffer unready pipes and kill ones that timed out.
+        for wpipe in unready_pipes:
+            pipebuf = pipes.get(wpipe)
+            if not pipebuf or pipebuf.timedout:
+                print("killing timedout wpipe: {}".format(wpipe), file=sys.stderr) # TODO XXX
+                kill_pipes.add(wpipe)
+                continue
+            pipebuf.store_buffer(chunk)
+        # Kill pipes that are targeted for termination.
+        if kill_pipes:
+            with self._pipes_lock:
+                for wpipe in kill_pipes:
+                    print("killing wpipe: {}".format(wpipe), file=sys.stderr) # TODO XXX
                     if wpipe in self._pipes:
+                        print("yes wpipe: {} is so kill".format(wpipe), file=sys.stderr) # TODO XXX
                         os.close(wpipe)
-                        del self._pipes[self._pipes.index(wpipe)]
+                        del self._pipes[wpipe]
 
     def close(self):
         with self._pipes_lock:
+            print("closing multiclientbuffer {:x}".format(id(self)), file=sys.stderr) # TODO XXX
             self._closed = True
             for wpipe in self._pipes:
                 os.close(wpipe)
-            self._pipes = []
+            self._pipes = {}
+
+
+class _PipeBuffer:
+    def __init__(self, pipe):
+        self._pipe = pipe
+        self._buffer = b''
+        self._last_ready = _monotonic()
+
+    @property
+    def timedout(self):
+        return (_monotonic() - self._last_ready) > _CLIENT_WPIPE_TIMEOUT
+
+    def write(self, chunk):
+        payload = self._buffer + chunk
+        self._buffer = b''
+        try:
+            written_len = os.write(self._pipe, payload)
+        except OSError as e:
+            if e.errno in [errno.EAGAIN, errno.EWOULDBLOCK]:
+                self._buffer = payload
+            else:
+                raise
+        else:
+            self._last_ready = _monotonic()
+            if written_len < len(payload):
+                self._buffer = payload[written_len:]
+
+    def store_buffer(self, chunk):
+        self._buffer += chunk
 
 
 class _NullFeed:
@@ -338,6 +404,11 @@ class _NullFeed:
 
     def __bool__(self):
         return False
+
+
+def _monotonic():
+    return time.clock_gettime(time.CLOCK_MONOTONIC_RAW)
+
 
 _null_feed = _NullFeed()
 _global_ctx = _GlobalContext()
