@@ -9,10 +9,8 @@ import time
 import select
 import shlex
 import subprocess
-import sys
 
 
-# TODO optimal read size?
 _PIPE_CHUNK_SIZE = select.PIPE_BUF
 _CLIENT_WPIPE_TIMEOUT = 10.0
 
@@ -76,14 +74,11 @@ def _stream(stream_name, stream_cfg, feeds_cfg, logdir):
                 stream_rpipe = stream.new_reader()
                 try:
                     while stream.is_alive():
-                        #print("reading chunk for stream '{}'".format(stream_id), file=sys.stderr) # TODO XXX
                         chunk = os.read(stream_rpipe, _PIPE_CHUNK_SIZE)
-                        #print("read chunk of size {} from rpipe {}".format(len(chunk), stream_rpipe), file=sys.stderr) # TODO XXX
                         if not chunk:
                             break
                         yield chunk
                 finally:
-                    print("and so the klient dies", file=sys.stderr) # TODO XXX
                     os.close(stream_rpipe)
     return generate()
 
@@ -193,7 +188,6 @@ class _Feed:
         self._closed = True
 
     def new_reader(self):
-        print("creating new pipe set for feed {}".format(self._feed_id), file=sys.stderr) # TODO XXX
         return self._pipeline.new_reader()
 
     def is_alive(self):
@@ -346,9 +340,7 @@ class _Plumbing:
             os.close(self._pipeline_notify_wpipe)
         t = self._thread
         if t:
-            print("join us in death!", file=sys.stderr) # TODO XXX
             t.join()
-            print("joined us in death!", file=sys.stderr) # TODO XXX
         os.close(self._pipeline_notify_rpipe)
         self._thread = None
 
@@ -356,7 +348,6 @@ class _Plumbing:
         while self._running:
             with self._lock:
                 while self._running and not self._pipelines:
-                    print("awaiting first pipeline", file=sys.stderr) # TODO XXX
                     self._lock.wait()
                 if not self._running:
                     break
@@ -375,28 +366,22 @@ class _Plumbing:
         all_pending_wpipes = []
         for pipeline in pipelines.values():
             if not pipeline.lifecheck() or pipeline.to_close:
-                print("ZDHECLME {:x}".format(id(pipeline)), file=sys.stderr) # TODO XXX
                 dead_feed_pipes.add(pipeline.feed_pipe)
                 continue
             pending_wpipes = pipeline.pending_wpipes()
             if pending_wpipes:
                 all_pending_pipelines.append(pipeline)
                 all_pending_wpipes += pending_wpipes
-        #print("pipki {}, {}".format(feed_pipes, all_pending_wpipes), file=sys.stderr) # TODO XXX
         ready_feed_pipes, ready_pending_wpipes, _ = select.select(feed_pipes, all_pending_wpipes, [], _CLIENT_WPIPE_TIMEOUT)
-        #print("gotowe pipki {}, {}".format(ready_feed_pipes, ready_pending_wpipes), file=sys.stderr) # TODO XXX
         # Deal with new data.
         for feed_pipe in ready_feed_pipes:
-            #print("\tos.read pipka", file=sys.stderr) # TODO XXX
             chunk = os.read(feed_pipe, _PIPE_CHUNK_SIZE)
-            #print("\tos.read pipka = {}".format(len(chunk)), file=sys.stderr) # TODO XXX
             if not chunk:
                 dead_feed_pipes.add(feed_pipe)
                 continue
             if feed_pipe != self._pipeline_notify_rpipe:
                 pipelines[feed_pipe].write(chunk)
         # Deal with data that was already waiting to be piped out.
-        #print("\tmla", file=sys.stderr) # TODO XXX
         if ready_pending_wpipes:
             for pipeline in all_pending_pipelines:
                 pending_wpipes_for_this_buf = [wpipe for wpipe in ready_pending_wpipes
@@ -412,7 +397,6 @@ class _Plumbing:
             pipeline.close_timedout()
         # Reap graveyard.
         if dead_feed_pipes:
-            print("graveyard", file=sys.stderr) # TODO XXX
             dead_pipelines = []
             with self._lock:
                 for feed_pipe in dead_feed_pipes:
@@ -434,7 +418,6 @@ class _Pipeline:
         self.to_close = False
 
     def close(self):
-        print("pipeline close", file=sys.stderr) # TODO XXX
         self.dead = True
         self.outbuffer.close()
 
@@ -448,7 +431,6 @@ class _Pipeline:
         return not self.dead  # duh
 
     def mark_for_close(self):
-        print("pipeline mark_for_close", file=sys.stderr) # TODO XXX
         self.to_close = True
 
     def new_reader(self):
@@ -472,7 +454,6 @@ class _MultiClientBuffer:
             if self._closed:
                 raise IOError(errno.EIO, "already closed")
             rpipe, wpipe = os.pipe()
-            print("\tcreated pipeset r={}, w={}".format(rpipe, wpipe), file=sys.stderr) # TODO XXX
             self._pipes[wpipe] = _PipeBuffer(wpipe)
             return rpipe
 
@@ -502,13 +483,10 @@ class _MultiClientBuffer:
         with self._pipes_lock:
             timedout_wpipes = [wpipe for wpipe in self._pipes
                                if self._pipes[wpipe].timedout]
-            if timedout_wpipes:
-                print("closing timedout wpipes {:x}, {}".format(id(self), timedout_wpipes), file=sys.stderr) # TODO XXX
             self._close_wpipes(timedout_wpipes)
 
     def close(self):
         with self._pipes_lock:
-            print("closing multiclientbuffer {:x}, was already closed? {}".format(id(self), self._closed), file=sys.stderr) # TODO XXX
             self._closed = True
             for wpipe in self._pipes:
                 os.close(wpipe)
