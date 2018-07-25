@@ -134,6 +134,8 @@ def _teardown(*args):
 
 class _GlobalContext:
     def __init__(self):
+        self._plumbing = _Plumbing()
+        self._plumbing.start()
         self._feeds = {}
         self._feed_lock = threading.Lock()
 
@@ -156,6 +158,10 @@ class _GlobalContext:
             for feed in self._feeds.values():
                 feed._close()
             self._feeds = {}
+        self._plumbing.stop()
+
+    def add_pipeline(self, pipeline):
+        self._plumbing.add_pipeline(pipeline)
 
 
 class _Feed:
@@ -173,7 +179,6 @@ class _Feed:
         self._rpipe = None
         self._cmd = cmd
         self._buffer = None
-        self._thread = None
         self._closed = True
 
     def new_reader(self):
@@ -235,10 +240,10 @@ class _Feed:
                 os.close(wpipe)
                 wpipe = None
             self._closed = False
-            thread = threading.Thread(target=self._buffer_loop)
-            thread.daemon = True
-            thread.start()
-            self._thread = thread
+            pipeline = _Pipeline(self._rpipe, self._buffer,
+                                 lifecheck=self.is_alive,
+                                 deadhandler=None)
+            _global_ctx.add_pipeline(pipeline)
         except BaseException:
             self._close()
             raise
@@ -249,8 +254,8 @@ class _Feed:
                 os.close(wpipe)
 
     def _close(self):
-        self._buffer.close()
         self._closed = True
+        self._buffer.close()
         # Stop process.
         p = self._process
         self._process = None
@@ -266,28 +271,6 @@ class _Feed:
         self._rpipe = None
         if rpipe:
             os.close(rpipe)
-        # Close piping thread.
-        thread = self._thread
-        self._thread = None
-        if thread:
-            thread.join()
-
-    def _buffer_loop(self):
-        while not self._closed and self.is_alive():
-            rpipe = self._rpipe
-            if not rpipe:
-                break
-            rpipes, _, _ = select.select([rpipe], [], [], _FEED_RPIPE_TIMEOUT)
-            if rpipes:
-                chunk = os.read(rpipe, _PIPE_CHUNK_SIZE)
-                if not chunk:
-                    break
-                #print("writing chunk to buffer '{}'".format(self._feed_id), file=sys.stderr) # TODO XXX
-                self._buffer.write(chunk)
-                #print("written '{}'".format(self._feed_id)) # TODO XXX
-        # This will break all connections and effectively close the feed.
-        self._buffer.close()
-        # TODO respawn?
 
     def _is_mode_valid(self, mode):
         return mode in ["continuous", "on-demand"] or isinstance(mode, (float, int))
@@ -319,51 +302,42 @@ class _MultiClientBuffer:
     def write(self, chunk):
         if self._closed:
             return
-        # Select pipes to write to.
-        with self._pipes_lock:
-            pipes = dict(self._pipes)
-        if not pipes:
-            return
-        _, ready_pipes, _ = select.select([], list(pipes.keys()), [], _CLIENT_WPIPE_TIMEOUT)
-        unready_pipes = [pipe for pipe in pipes if pipe not in ready_pipes]
-        if unready_pipes:
-            print("ready {}, unready {}".format(ready_pipes, unready_pipes), file=sys.stderr) # TODO XXX
-        kill_pipes = set()
-        # Write to ready pipes.
-        for wpipe in ready_pipes:
-            pipebuf = pipes.get(wpipe)
+        for pipe in self._copy_pipes().values():
+            pipe.write(chunk)
+
+    def flush(self, wpipes, amount):
+        pipes = self._copy_pipes()
+        bad_wpipes = []
+        for wpipe in wpipes:
             try:
-                #print("WRITING {}, {}".format(wpipe, len(chunk)), file=sys.stderr) # TODO XXX
-                written = pipebuf.write(chunk)
-                #print("WRITTEN {}, {}".format(wpipe, written), file=sys.stderr) # TODO XXX
-            except IOError:
-                print("IOIO on wpipe {}".format(wpipe), file=sys.stderr) # TODO XXX
-                kill_pipes.add(wpipe)
-        # Buffer unready pipes and kill ones that timed out.
-        for wpipe in unready_pipes:
-            pipebuf = pipes.get(wpipe)
-            if not pipebuf or pipebuf.timedout:
-                print("killing timedout wpipe: {}".format(wpipe), file=sys.stderr) # TODO XXX
-                kill_pipes.add(wpipe)
-                continue
-            pipebuf.store_buffer(chunk)
-        # Kill pipes that are targeted for termination.
-        if kill_pipes:
+                pipe = pipes[wpipe]
+                pipe.flush(amount)
+            except OSError:
+                bad_wpipes.append(wpipe)
+        if bad_wpipes:
             with self._pipes_lock:
-                for wpipe in kill_pipes:
-                    print("killing wpipe: {}".format(wpipe), file=sys.stderr) # TODO XXX
-                    if wpipe in self._pipes:
-                        print("yes wpipe: {} is so kill".format(wpipe), file=sys.stderr) # TODO XXX
+                for wpipe in bad_wpipes:
+                    try:
                         os.close(wpipe)
+                    except OSError:
+                        pass
+                    if wpipe in self._pipes:
                         del self._pipes[wpipe]
+
+    def pending_wpipes(self):
+        return [wpipe for (wpipe, pipe) in self._copy_pipes().items() if pipe.pending]
 
     def close(self):
         with self._pipes_lock:
-            print("closing multiclientbuffer {:x}".format(id(self)), file=sys.stderr) # TODO XXX
+            print("closing multiclientbuffer {:x}, was already closed? {}".format(id(self), self._closed), file=sys.stderr) # TODO XXX
             self._closed = True
             for wpipe in self._pipes:
                 os.close(wpipe)
             self._pipes = {}
+
+    def _copy_pipes(self):
+        with self._pipes_lock:
+            return dict(self._pipes)
 
 
 class _PipeBuffer:
@@ -376,23 +350,125 @@ class _PipeBuffer:
     def timedout(self):
         return (_monotonic() - self._last_ready) > _CLIENT_WPIPE_TIMEOUT
 
+    @property
+    def pending(self):
+        return self._buffer
+
     def write(self, chunk):
-        payload = self._buffer + chunk
-        self._buffer = b''
+        self._buffer += chunk
+
+    def flush(self, amount):
+        payload = self._buffer
         try:
-            written_len = os.write(self._pipe, payload)
+            if payload:
+                written_len = os.write(self._pipe, payload[:amount])
         except OSError as e:
-            if e.errno in [errno.EAGAIN, errno.EWOULDBLOCK]:
-                self._buffer = payload
-            else:
+            if e.errno not in [errno.EAGAIN, errno.EWOULDBLOCK]:
                 raise
         else:
             self._last_ready = _monotonic()
-            if written_len < len(payload):
-                self._buffer = payload[written_len:]
+            self._buffer = payload[written_len:]
 
-    def store_buffer(self, chunk):
-        self._buffer += chunk
+    def fileno(self):
+        return self._pipe
+
+
+class _Plumbing:
+    def __init__(self):
+        self._pipelines = {}
+        self._lock = threading.Condition()
+        self._thread = None
+        self._running = False
+
+    def add_pipeline(self, pipeline):
+        with self._lock:
+            self._pipelines[pipeline.feed_pipe] = pipeline
+            self._lock.notify_all()
+
+    def start(self):
+        try:
+            self._running = True
+            t = threading.Thread(target=self._run)
+            t.daemon = True
+            t.start()
+        except BaseException:
+            self._running = False
+            raise
+        self._thread = t
+
+    def stop(self):
+        with self._lock:
+            self._running = False
+            self._lock.notify_all()
+        t = self._thread
+        if t:
+            t.join()
+        self._thread = None
+
+    def _run(self):
+        while self._running:
+            with self._lock:
+                while self._running and not self._pipelines:
+                    print("awaiting first pipeline", file=sys.stderr) # TODO XXX
+                    self._lock.wait()
+                if not self._running:
+                    break
+            self._run_step()
+
+    def _run_step(self):
+        with self._lock:
+            pipelines = dict(self._pipelines)
+        if not pipelines:
+            return
+        dead_feed_pipes = set()
+        # Prepare pending selections.
+        feed_pipes = [feed_pipe for feed_pipe in pipelines]
+        all_pending_pipelines = []
+        all_pending_wpipes = []
+        for pipeline in pipelines.values():
+            if not pipeline.lifecheck():
+                print("ZDHECLME {:x}".format(id(pipeline)), file=sys.stderr) # TODO XXX
+                dead_feed_pipes.add(pipeline.feed_pipe)
+                continue
+            pending_wpipes = pipeline.outbuffer.pending_wpipes()
+            if pending_wpipes:
+                all_pending_pipelines.append(pipeline)
+                all_pending_wpipes += pending_wpipes
+        #print("pipki {}, {}".format(feed_pipes, all_pending_wpipes), file=sys.stderr) # TODO XXX
+        ready_feed_pipes, ready_pending_wpipes, _ = select.select(feed_pipes, all_pending_wpipes, [])
+        # Deal with new data.
+        for feed_pipe in ready_feed_pipes:
+            chunk = os.read(feed_pipe, _PIPE_CHUNK_SIZE)
+            if not chunk:
+                dead_feed_pipes.add(feed_pipe)
+                continue
+            buf = pipelines[feed_pipe].outbuffer
+            buf.write(chunk)
+        # Deal with data that was already waiting to be piped out.
+        if ready_pending_wpipes:
+            for pipeline in all_pending_pipelines:
+                pending_wpipes_for_this_buf = [wpipe for wpipe in ready_pending_wpipes
+                                               if wpipe in pipeline.outbuffer.pending_wpipes()]
+                if pending_wpipes_for_this_buf:
+                    pipeline.outbuffer.flush(pending_wpipes_for_this_buf, _PIPE_CHUNK_SIZE)
+        # Reap graveyard.
+        if dead_feed_pipes:
+            print("graveyard", file=sys.stderr) # TODO XXX
+            dead_pipelines = []
+            with self._lock:
+                for feed_pipe in dead_feed_pipes:
+                    dead_pipelines.append(self._pipelines[feed_pipe])
+                    del self._pipelines[feed_pipe]
+            for pipeline in dead_pipelines:
+                pipeline.deadhandler()
+
+
+class _Pipeline:
+    def __init__(self, feed_pipe, outbuffer, lifecheck, deadhandler=None):
+        self.feed_pipe = feed_pipe
+        self.outbuffer = outbuffer
+        self.lifecheck = lifecheck or (lambda: False)
+        self.deadhandler = deadhandler or (lambda: None)
 
 
 class _NullFeed:
