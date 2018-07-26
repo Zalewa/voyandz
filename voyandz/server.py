@@ -9,9 +9,18 @@ import os
 flask.logging.default_handler.setFormatter(logging.LogFormatter())
 
 
-@app.route('/')
-def hello():
-    return "voyandz reporting for duty"
+@app.route('/', defaults={'path': ''})
+@app.route('/<path:path>')
+def hello(path):
+    # Try to match path to a stream with customized URL.
+    if path:
+        stream_name = _find_stream(path)
+        if stream_name:
+            return stream(stream_name)
+        else:
+            flask.abort(404)
+    else:
+        return "voyandz reporting for duty"
 
 
 @app.route('/stream/<name>')
@@ -68,6 +77,26 @@ def add_headers(request):
     request.headers["Pragma"] = "no-cache"
     request.headers["Expires"] = "0"
     return request
+
+
+def _find_stream(path):
+    if not path:
+        raise ValueError("empty path")
+    # Trim the initial '/' if present to match to paths
+    # where config did not specify the prefixing '/'
+    if path[0] == '/':
+        path = path[1:]
+    if not path:
+        raise ValueError("stream cannot be at root path")
+    streams = _cfg("streams")
+    for stream_name, stream in streams.items():
+        stream_url = stream.get("url") or ""
+        # Trim the initial '/' from the config path.
+        if stream_url and stream_url[0] == '/':
+            stream_url = stream_url[1:]
+        if path == stream_url:
+            return stream_name
+    return None
 
 
 def _cfg(path=""):

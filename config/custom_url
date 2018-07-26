@@ -1,0 +1,47 @@
+# Custom URLs for streams - they don't even need to begin
+# with '/stream/'!
+
+## IP address on which the server will be listening.
+listenaddr: '127.0.0.1'
+
+## Network port on which the server will be listening.
+listenport: 8090
+
+#logdir: /var/log/voyandz
+
+feeds:
+  vid1:
+    command: >
+      ffmpeg -re -stream_loop -1 -i /opt/vid/vid1.ts
+      -f mpjpeg -qmin 1 -qmax 6 -r 4 -boundary_tag ffmpeg -
+    mode: continuous
+  vid2:
+    command: >
+      ffmpeg -re -stream_loop -1 -i /opt/vid/vid2.ts
+      -f mpjpeg -qmin 1 -qmax 6 -r 4 -boundary_tag ffmpeg -
+    mode: continuous
+
+## Streams
+streams:
+  vid1:
+    command: cat
+    type: stream
+    mimetype: multipart/x-mixed-replace;boundary=ffmpeg
+    feed: vid1
+    ## URL is an absolute path on this server.
+    ## Clients will resolve it like:
+    ## http://<addr>:<port>/scary/vid
+    url: /scary/vid
+  vid2:
+    command: cat
+    type: stream
+    mimetype: multipart/x-mixed-replace;boundary=ffmpeg
+    feed: vid2
+    url: /funny/vid
+
+## Extra pages
+pages:
+  ## Dump config at /cfg
+  config: false
+  ## Dump statistics at /stat
+  stat: true
