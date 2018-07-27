@@ -69,24 +69,24 @@ def _stream(stream_name, stream_cfg, feeds_cfg, logdir):
     exclusive = (stream_cfg.get("client") == "exclusive")
 
     def generate():
-        with _feed_for_stream(stream_cfg, feeds_cfg, logdir=logdir) as feed:
-            with _global_ctx.feed(stream_id, cmd, feed,
-                                  logdir=logdir, exclusive=exclusive) as stream:
-                stream_rpipe = stream.new_reader()
-                try:
-                    while stream.is_alive():
-                        chunk = os.read(stream_rpipe, _PIPE_CHUNK_SIZE)
-                        if not chunk:
-                            break
-                        yield chunk
-                finally:
-                    os.close(stream_rpipe)
+        feed = _feed_for_stream(stream_cfg.get('feed'), feeds_cfg, logdir=logdir)
+        with _global_ctx.feed(stream_id, cmd, feed,
+                              logdir=logdir, exclusive=exclusive) as stream:
+            stream_rpipe = stream.new_reader()
+            try:
+                while stream.is_alive():
+                    chunk = os.read(stream_rpipe, _PIPE_CHUNK_SIZE)
+                    if not chunk:
+                        break
+                    yield chunk
+            finally:
+                os.close(stream_rpipe)
     return generate()
 
 
 def _shot(stream_cfg, feeds_cfg):
     cmd = shlex.split(stream_cfg['command'])
-    with _feed_for_stream(stream_cfg, feeds_cfg, logdir=stream_cfg.get('logdir')) as feed:
+    with _feed_for_stream(stream_cfg.get('feed'), feeds_cfg, logdir=stream_cfg.get('logdir')) as feed:
         stdin = None
         if feed:
             stdin = feed.new_reader()
@@ -104,24 +104,26 @@ def _shot(stream_cfg, feeds_cfg):
             raise Error(stderr.decode('utf-8', 'replace'))
 
 
-def _feed_for_stream(stream_cfg, feeds_cfg, logdir):
-    feed_name = stream_cfg.get('feed')
+def _feed_for_stream(feed_name, feeds_cfg, logdir):
     if not feed_name:
         return _null_feed
     try:
         feed_cfg = feeds_cfg[feed_name]
     except KeyError:
         raise NoSuchFeedError("feed '{}' cannot be found".format(feed_name))
-    return _feed(feed_name, feed_cfg, logdir=logdir)
+    parent_feed = _feed_for_stream(feed_cfg.get('feed'), feeds_cfg, logdir)
+    return _feed(feed_name, feed_cfg, logdir=logdir, input_feed=parent_feed)
 
 
-def _feed(feed_name, feed_cfg, logdir):
+def _feed(feed_name, feed_cfg, logdir, input_feed=None):
+    input_feed = input_feed or _null_feed
     command = feed_cfg['command']
     mode = feed_cfg.get('mode', 'on-demand')
     if isinstance(mode, str):
         mode = mode.lower()
     return _global_ctx.feed("feed_{}".format(feed_name),
-                            command, mode=mode, logdir=logdir)
+                            command, input_feed=input_feed,
+                            mode=mode, logdir=logdir)
 
 
 @atexit.register
@@ -230,6 +232,7 @@ class _Feed:
                 self._close()
 
     def _open(self):
+        self.input_feed.open()
         cmd = shlex.split(self._cmd)
         logfile = subprocess.DEVNULL
         feed_rpipe = subprocess.DEVNULL
@@ -288,6 +291,7 @@ class _Feed:
             except subprocess.TimeoutExpired:
                 p.kill()
                 p.wait()
+        self.input_feed.close()
 
     def _is_mode_valid(self, mode):
         return mode in ["continuous", "on-demand"] or isinstance(mode, (float, int))
@@ -554,6 +558,12 @@ class _NullFeed:
         return self
 
     def __exit__(self, *args):
+        pass
+
+    def open(self):
+        pass
+
+    def close(self):
         pass
 
     def __bool__(self):
