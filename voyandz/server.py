@@ -2,7 +2,7 @@ from voyandz import app, config, logging, piping
 import flask
 
 from io import BytesIO
-from pprint import pformat
+import json
 import os
 
 
@@ -46,8 +46,8 @@ def stream(name):
 def config_page():
     if not _cfg('pages/config') and os.environ.get('FLASK_ENV') != 'development':
         flask.abort(403)
-    configdump = pformat(app.config['voyandz'])
-    return "<pre>{}</pre>".format(flask.escape(configdump))
+    output = json.dumps(app.config['voyandz'], indent=2)
+    return flask.Response(output, mimetype="application/json")
 
 
 @app.route('/stat')

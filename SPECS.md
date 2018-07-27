@@ -300,6 +300,13 @@ Template resolution should happen at program load.
 Application should receive the configuration in a final format,
 as if the user copied & pasted everything around.
 
+Configuration dump endpoint should be enableable through a configuration
+parameter. This parameter should be disabled by default. Configuration
+should be dumped in JSON format at /config endpoint. Using JSON format
+here is counter-intuitive, as the input configs are YAML. JSON format
+was chosen regardless because it displays well in browsers, programming
+languages have (built-in) libraries to parse it and it has a standardized
+MIME type.
 
 Authorization
 -------------
