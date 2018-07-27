@@ -124,17 +124,18 @@ Feeds are input pipes where the source material will come *in*.
 Feeds are uniquely identified by their names. There can't be
 more than one feed with the same name.
 
-Feeds can be defined as:
-
-* A path to a file (including a named pipe).
-* A command that outputs the feed to stdout.
+Feeds can be defined as a command that outputs the feed to stdout.
 
 Feeds should be configurable as:
 
 * Continuous - in this mode the feed will be always active, draining
   resources even if there's no one using it. This mode is useful
   when the input source doesn't handle disconnections or subsequent
-  reconnections very well.
+  reconnections very well. Feed in 'continous' mode doesn't start
+  until it's needed for the first time.
+
+* Autostart - like the 'continuous' mode, but doesn't wait on first
+  use. Starts with voyandz.
 
 * On-demand - in this mode the feed will only be activated when
   at least one connection to a stream configured to use this feed
@@ -150,10 +151,12 @@ Feeds should be configurable as:
 When more than one stream needs a single feed, this single feed must be
 used for all streams. The new stream cannot open a duplicate feed.
 
+It should be possible for a feed to have its own feed, thus allowing
+to chain commands together like piping with '|' in shell.
+
 If feed dies while being used in the "on-demand" mode, or at any time in
 the "continuous" mode, it must be resurrected immediately, unless
-it's explicitly configured with 'no-resurrect' flag. This also applies
-when the input comes from a file or a named pipe. There should be
+it's explicitly configured with 'no-resurrect' flag. There should be
 no limit to resurrection attempts, however repeated failures should
 have limited error logging.
 
