@@ -66,11 +66,12 @@ def stream(cfg, stream_name):
 def _stream(stream_name, stream_cfg, feeds_cfg, logdir):
     cmd = stream_cfg['command']
     stream_id = "stream_{}".format(stream_name)
+    exclusive = (stream_cfg.get("client") == "exclusive")
 
     def generate():
         with _feed_for_stream(stream_cfg, feeds_cfg, logdir=logdir) as feed:
             with _global_ctx.feed(stream_id, cmd, feed,
-                                  logdir=logdir) as stream:
+                                  logdir=logdir, exclusive=exclusive) as stream:
                 stream_rpipe = stream.new_reader()
                 try:
                     while stream.is_alive():
@@ -132,17 +133,23 @@ class _GlobalContext:
     def __init__(self):
         self._plumbing = _Plumbing()
         self._plumbing.start()
-        self._feeds = {}
+        self._shared_feeds = {}
+        self._feeds = []
         self._feed_lock = threading.Lock()
 
     def feed(self, feed_id, cmd, input_feed=None, mode="on-demand",
-             logdir=None):
+             logdir=None, exclusive=False):
         with self._feed_lock:
-            feed = self._feeds.get(feed_id)
+            feed = None
+            if not exclusive:
+                feed = self._shared_feeds.get(feed_id)
             if feed is None:
                 feed = _Feed(feed_id, cmd, input_feed, mode=mode,
                              logdir=logdir)
-                self._feeds[feed_id] = feed
+                if exclusive:
+                    self._feeds.append(feed)
+                else:
+                    self._shared_feeds[feed_id] = feed
             if input_feed is not feed.input_feed:
                 raise FeedReuseError("with a different input feed", feed_id)
             if mode != feed.mode:
@@ -151,9 +158,12 @@ class _GlobalContext:
 
     def close(self):
         with self._feed_lock:
-            for feed in self._feeds.values():
+            for feed in self._shared_feeds.values():
                 feed._close()
-            self._feeds = {}
+            self._shared_feeds = {}
+            for feed in self._feeds:
+                feed._close()
+            self._feeds = []
         self._plumbing.stop()
 
     def add_pipeline(self, pipeline):
