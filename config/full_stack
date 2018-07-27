@@ -36,7 +36,7 @@ streams:
 
 ## Extra pages
 pages:
-  ## Dump config at /cfg
+  ## Dump config at /config
   config: true
   ## Dump statistics at /stat
   stat: true
