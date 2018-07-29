@@ -159,10 +159,9 @@ class _GlobalContext:
     def feed(self, feed_id, cmd, input_feed=None, mode="on-demand",
              logdir=None, exclusive=False):
         with self._feed_lock:
-            feed = None
-            if not exclusive:
-                feed = self._shared_feeds.get(feed_id)
+            feed = self._find_free_feed(feed_id, exclusive)
             if feed is None:
+                # Spawn a new one.
                 feed = _Feed(feed_id, cmd, input_feed, mode=mode,
                              logdir=logdir)
                 if exclusive:
@@ -205,6 +204,16 @@ class _GlobalContext:
             feeds.append(self._shared_feeds[feed_id])
         feeds += [feed for feed in self._feeds if feed.feed_id == feed_id]
         return feeds
+
+    def _find_free_feed(self, feed_id, exclusive):
+        if exclusive:
+            # Try to reuse an unused exclusive feed
+            for unused_feed in self._feeds:
+                if unused_feed.feed_id == feed_id and not unused_feed.is_alive():
+                    return unused_feed
+        else:
+            return self._shared_feeds.get(feed_id)
+        return None
 
 
 class _Feed:
