@@ -70,6 +70,73 @@ Source material:
 2. https://github.com/kennethreitz/samplemod
 3. http://flask.pocoo.org/docs/0.12/patterns/distribute/#
 
+
+Versioning
+==========
+
+Versioning follows semantic versioning:
+
+https://semver.org/
+
+Voyandz's 'piping' functionality could be used as a library, therefore
+having a clear versioning scheme is important, as is sticking to the
+compatibility recommendations for this versioning scheme.
+
+
+Development Branches
+--------------------
+
+All development that doesn't break existing functionality should
+be conducted on the `master` branch.
+
+All development should not break existing functionality, unless
+maintaining current functionality would be inconvenient.
+
+Development that breaks existing functionality can be moved to
+a 'feature' branch. A completed 'feature' branch should be merged
+into `master` branch with explicit merge commit, even if fast-forward
+would also do.
+
+Bugfixing (PATCH versions) should be branched off the master
+branch to a "x.y_bugfix" branch. However, if there are no
+new features present on the `master` branch and the bugfix
+release is expected to be done quickly then it's allowed
+to make a "bugfix" release off the `master` branch.
+
+Bugfixing commits that already exist on `master` branch can be
+cherry-picked from there to the 'bugfix' branch.
+
+
+Version Tagging
+---------------
+
+"Feature" releases must be tagged on the `master` branch.
+
+"Bugfix" releases may be tagged on the 'bugfix' branch.
+
+Tags must be named `voyandz_vx.y.z`, for example: `voyandz_v0.1.0`,
+`voyandz_v1.11.4`, etc.
+
+Tags must be annotated with 'voyandz vx.y.z' message, ie. the same
+as tag name but use spaces instead of underscores.
+
+  git tag -am 'voyandz v1.11.4' voyandz_v1.11.4
+
+Version bumping commits must follow this commit message pattern:
+
+  Version: voyandz vx.y.z
+
+The `z` part in `x.y.z` musn't be ommitted, even if it's `0`.
+
+To differ release builds from builds made from development commits,
+development version bump commit should be created as soon as release
+commit is tagged, and immediately follow this release commit.
+
+Development versions should end with 'dev' suffix, ie. `x.y.zdev`.
+
+Development version bump commit should not be tagged.
+
+
 Implementation
 ==============
 
