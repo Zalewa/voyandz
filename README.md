@@ -12,6 +12,17 @@ doesn't delve into codec details, but merely deals with piping.
 
 `ffmpeg` not attached.
 
+Home page: https://github.com/Zalewa/voyandz/
+
+Installation
+============
+
+  pip3 install voyandz
+
+Then run:
+
+  voyandz -h
+
 
 Current State
 =============
