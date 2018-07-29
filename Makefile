@@ -1,3 +1,6 @@
+sdist:
+	python3 setup.py sdist
+
 init:
 	pip install -r requirements.txt
 
@@ -14,3 +17,5 @@ clean:
 	python3 setup.py clean
 	rm -rf build dist voyandz.egg-info
 	rm -rf voyandz/__pycache__
+
+.PHONY: sdist init install dev rundev clean
