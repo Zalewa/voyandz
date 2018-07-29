@@ -49,5 +49,17 @@ def load_config(io):
     pages.setdefault('stat', True)
     cfg.setdefault('streams', {})
     cfg.setdefault('feeds', {})
+    _normalize_stream_urls(cfg)
     # TODO: more default values
     return cfg
+
+
+def _normalize_stream_urls(cfg):
+    for stream in cfg['streams'].values():
+        if 'url' in stream:
+            stream_url = str(stream['url'])
+            stream_url = stream_url.lstrip('/')
+            if stream_url:
+                stream['url'] = stream_url
+            else:
+                del stream['url']

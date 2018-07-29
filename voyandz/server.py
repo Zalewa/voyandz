@@ -104,9 +104,6 @@ def _find_stream(path):
     streams = _cfg("streams")
     for stream_name, stream in streams.items():
         stream_url = stream.get("url") or ""
-        # Trim the initial '/' from the config path.
-        if stream_url and stream_url[0] == '/':
-            stream_url = stream_url[1:]
         if path == stream_url:
             return stream_name
     return None
