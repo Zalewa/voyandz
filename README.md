@@ -17,12 +17,15 @@ Home page: https://github.com/Zalewa/voyandz/
 Installation
 ============
 
+```
   pip3 install voyandz
+```
 
 Then run:
 
+```
   voyandz -h
-
+```
 
 Current State
 =============

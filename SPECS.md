@@ -120,11 +120,15 @@ Tags must be named `voyandz_vx.y.z`, for example: `voyandz_v0.1.0`,
 Tags must be annotated with 'voyandz vx.y.z' message, ie. the same
 as tag name but use spaces instead of underscores.
 
+```
   git tag -am 'voyandz v1.11.4' voyandz_v1.11.4
+```
 
 Version bumping commits must follow this commit message pattern:
 
+```
   Version: voyandz vx.y.z
+```
 
 The `z` part in `x.y.z` musn't be ommitted, even if it's `0`.
 
