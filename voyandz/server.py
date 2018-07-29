@@ -18,9 +18,11 @@ def hello(path):
         if stream_name:
             return stream(stream_name)
         else:
-            flask.abort(404)
+            return flask.abort(404)
+    elif _cfg("pages/home"):
+        return _home_page()
     else:
-        return "voyandz reporting for duty"
+        flask.abort(403)
 
 
 @app.route('/stream/<name>')
@@ -77,6 +79,17 @@ def add_headers(request):
     request.headers["Pragma"] = "no-cache"
     request.headers["Expires"] = "0"
     return request
+
+
+def _home_page():
+    streams = _cfg("streams")
+    pages = _cfg("pages")
+    config_page = pages["config"]
+    stat_page = pages["stat"]
+    return flask.render_template(
+        "home.html", streams=streams,
+        any_page=any([stat_page, config_page]),
+        stat_page=stat_page, config_page=config_page)
 
 
 def _find_stream(path):

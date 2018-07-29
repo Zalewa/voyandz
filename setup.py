@@ -19,6 +19,7 @@ setup(
     author='Robikz',
     author_email='zalewapl@gmail.com',
     license=license,
+    include_package_data=True,
     packages=['voyandz'],
     install_requires=[
         'Flask',

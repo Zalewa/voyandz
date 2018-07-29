@@ -45,7 +45,8 @@ def load_config(io):
     cfg.setdefault('pages', {})
     pages = cfg['pages']
     pages.setdefault('config', False)
-    pages.setdefault('stat', False)
+    pages.setdefault('home', True)
+    pages.setdefault('stat', True)
     cfg.setdefault('streams', {})
     cfg.setdefault('feeds', {})
     # TODO: more default values

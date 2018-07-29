@@ -1,0 +1,32 @@
+<html>
+	<header>
+		<title>voyandz</title>
+		<meta charset="UTF-8">
+	</header>
+	<body>
+		<h1>voyandz</h1>
+		{% if streams %}
+			<h2>Streams</h2>
+			<ul>
+				{% for stream_name, stream in streams.items() %}
+					<li><a href="stream/{{ stream_name }}">{{ stream_name }}</a>
+						{% if stream.get("url") %}
+							<ul><li>Alt URL: <a href="{{ stream["url"] }}">{{ stream["url"] }}</a></li></ul>
+						{% endif %}
+					</li>
+				{% endfor %}
+			</ul>
+		{% endif %}
+		{% if any_page %}
+			<h2>Pages</h2>
+			<ul>
+				{% if config_page %}
+					<li><a href="/config">/config</a></li>
+				{% endif %}
+				{% if stat_page %}
+					<li><a href="/stat">/stat</a></li>
+				{% endif %}
+			</ul>
+		{% endif %}
+	</body>
+</html>
