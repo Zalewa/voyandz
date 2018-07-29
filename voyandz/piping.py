@@ -1,5 +1,6 @@
 # coding: utf-8
 from .logging import logopen
+from .stats import FeedStats
 
 import atexit
 import errno
@@ -63,9 +64,25 @@ def stream(cfg, stream_name):
     return stream_type, mimetype, output
 
 
+def stream_stats(name):
+    return _stats(name, _mk_stream_id(name))
+
+
+def feed_stats(name):
+    return _stats(name, _mk_feed_id(name))
+
+
+def _stats(name, feed_id):
+    stats = FeedStats(name)
+    feeds = _global_ctx.find_all_feeds(feed_id)
+    for feed in feeds:
+        stats.add_from_feed(feed)
+    return stats
+
+
 def _stream(stream_name, stream_cfg, feeds_cfg, logdir):
     cmd = stream_cfg['command']
-    stream_id = "stream_{}".format(stream_name)
+    stream_id = _mk_stream_id(stream_name)
     exclusive = (stream_cfg.get("client") == "exclusive")
 
     def generate():
@@ -121,7 +138,7 @@ def _feed(feed_name, feed_cfg, logdir, input_feed=None):
     mode = feed_cfg.get('mode', 'on-demand')
     if isinstance(mode, str):
         mode = mode.lower()
-    return _global_ctx.feed("feed_{}".format(feed_name),
+    return _global_ctx.feed(_mk_feed_id(feed_name),
                             command, input_feed=input_feed,
                             mode=mode, logdir=logdir)
 
@@ -182,6 +199,13 @@ class _GlobalContext:
         else:
             pipeline.close()
 
+    def find_all_feeds(self, feed_id):
+        feeds = []
+        if feed_id in self._shared_feeds:
+            feeds.append(self._shared_feeds[feed_id])
+        feeds += [feed for feed in self._feeds if feed.feed_id == feed_id]
+        return feeds
+
 
 class _Feed:
     def __init__(self, feed_id, cmd, input_feed, mode="on-demand",
@@ -198,6 +222,24 @@ class _Feed:
         self._pipeline = None
         self._cmd = cmd
         self._closed = True
+        self._total_transfer_so_far = 0
+
+    @property
+    def feed_id(self):
+        return self._feed_id
+
+    @property
+    def num_readers(self):
+        pipeline = self._pipeline
+        return self._pipeline.num_readers if pipeline else 0
+
+    @property
+    def total_transfer(self):
+        pipeline = self._pipeline
+        total_transfer = self._total_transfer_so_far
+        if pipeline:
+            total_transfer += pipeline.total_transfer
+        return total_transfer
 
     def new_reader(self):
         return self._pipeline.new_reader()
@@ -279,6 +321,7 @@ class _Feed:
         # Close pipeline
         pipeline = self._pipeline
         if pipeline:
+            self._total_transfer_so_far = pipeline.total_transfer
             _global_ctx.close_pipeline(pipeline)
         self._pipeline = None
         # Stop process.
@@ -430,6 +473,7 @@ class _Pipeline:
         self.lifecheck = lifecheck or (lambda: False)
         self.dead = False
         self.to_close = False
+        self.total_transfer = 0
 
     def close(self):
         self.dead = True
@@ -450,10 +494,15 @@ class _Pipeline:
     def new_reader(self):
         return self.outbuffer.new_reader()
 
+    @property
+    def num_readers(self):
+        return self.outbuffer.num_readers
+
     def pending_wpipes(self):
         return self.outbuffer.pending_wpipes()
 
     def write(self, chunk):
+        self.total_transfer += len(chunk)
         self.outbuffer.write(chunk)
 
 
@@ -462,6 +511,10 @@ class _MultiClientBuffer:
         self._pipes = {}
         self._pipes_lock = threading.Lock()
         self._closed = False
+
+    @property
+    def num_readers(self):
+        return len(self._pipes)
 
     def new_reader(self):
         with self._pipes_lock:
@@ -568,6 +621,14 @@ class _NullFeed:
 
     def __bool__(self):
         return False
+
+
+def _mk_feed_id(name):
+    return "feed_{}".format(name)
+
+
+def _mk_stream_id(name):
+    return "stream_{}".format(name)
 
 
 def _monotonic():

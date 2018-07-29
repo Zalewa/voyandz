@@ -1,12 +1,16 @@
-from voyandz import app, config, logging, piping
+from voyandz import app, config, logging, piping, stats
 import flask
 
 from io import BytesIO
+import datetime
 import json
 import os
 
 
+_DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S UTC"
+
 flask.logging.default_handler.setFormatter(logging.LogFormatter())
+_start_date = datetime.datetime.now(datetime.timezone.utc)
 
 
 @app.route('/', defaults={'path': ''})
@@ -56,7 +60,16 @@ def config_page():
 def stat():
     if not _cfg('pages/stat'):
         flask.abort(403)
-    return "no stats available currently"
+    all_feeds = sorted(_cfg('feeds').keys(), key=lambda k: k.lower())
+    feeds_stats = [piping.feed_stats(feed) for feed in all_feeds]
+    all_streams = sorted(_cfg('streams').keys(), key=lambda k: k.lower())
+    stream_stats = [piping.stream_stats(stream) for stream in all_streams]
+    return flask.render_template(
+        'stat.html',
+        start_date=_start_date.strftime(_DATETIME_FORMAT),
+        current_date=_nowdate().strftime(_DATETIME_FORMAT),
+        feeds=feeds_stats, streams=stream_stats,
+        totals=stats.Totals(feed_stats=feeds_stats, stream_stats=stream_stats))
 
 
 @app.before_first_request
@@ -115,3 +128,7 @@ def _cfg(path=""):
     for token in tokens:
         root = root[token]
     return root
+
+
+def _nowdate():
+    return datetime.datetime.now(datetime.timezone.utc)

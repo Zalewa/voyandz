@@ -1,0 +1,79 @@
+<html>
+	<header>
+		<title>voyandz - stats</title>
+		<meta charset="UTF-8">
+		<style>
+			table {
+				border-collapse: collapse;
+				border-spacing: 0px;
+			}
+			th, td {
+				border: 1px solid black;
+				padding: 2px 5px;
+			}
+			th { background-color: #ddf; }
+			tr.main-header { border: 2px solid black; }
+			tr.header { border-bottom: 2px solid black; }
+			tr.data th { text-align: left; }
+			table.flexdata tr:nth-child(even) { background-color: #ddd; }
+			.running { background-color: lime; }
+		</style>
+	</header>
+	<body>
+		<h1>voyandz - stats</h1>
+		<h2>Server</h2>
+		<table>
+			<tr class="data"><th>Started on:</th><td>{{ start_date }}</td></tr>
+			<tr class="data"><th>Current time:</th><td>{{ current_date }}</td></tr>
+		</table>
+		<h2>Totals</h2>
+		<table>
+			<tr class="header">
+				<th>Client Transfer</th>
+				<th>Internal Transfer</th>
+				<th>Current Clients</th>
+			</tr>
+			<tr class="data">
+				<td>{{ totals.client_transfer_human }}</td>
+				<td>{{ totals.internal_transfer_human }}</td>
+				<td>{{ totals.clients }}</td>
+			</tr>
+		</table>
+		{% if streams %}
+			<h2>Streams</h2>
+			<table class="flexdata">
+				<tr class="header">
+					<th>Name</th>
+					<th>Total Transfer</th>
+					<th>Clients</th>
+				</tr>
+				{% for stream in streams %}
+					<tr class="data">
+						<th><a href="stream/{{ stream.name }}">{{ stream.name }}</a></th>
+						<td>{{ stream.total_transfer_human }}</td>
+						<td>{{ stream.num_readers }}</td>
+					</tr>
+				{% endfor %}
+			</table>
+		{% endif %}
+		{% if feeds %}
+			<h2>Feeds</h2>
+			<table class="flexdata">
+				<tr class="header">
+					<th>Name</th>
+					<th>Total Transfer</th>
+					<th>Readers</th>
+					<th>Running</th>
+				</tr>
+				{% for feed in feeds %}
+					<tr class="data">
+						<th>{{ feed.name }}</th>
+						<td>{{ feed.total_transfer_human }}</td>
+						<td>{{ feed.num_readers }}</td>
+						<td class="{% if feed.is_running %}running{% endif %}">{{ feed.is_running }}</td>
+					</tr>
+				{% endfor %}
+			</table>
+		{% endif %}
+	</body>
+</html>
