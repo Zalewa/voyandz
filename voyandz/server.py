@@ -95,7 +95,7 @@ def add_headers(request):
 
 
 def _home_page():
-    streams = _cfg("streams")
+    streams = sorted(_cfg("streams").items(), key=lambda i: i[0].lower())
     pages = _cfg("pages")
     config_page = pages["config"]
     stat_page = pages["stat"]
