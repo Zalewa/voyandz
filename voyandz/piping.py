@@ -262,7 +262,11 @@ class _Feed:
 
     def open(self):
         with self._lock:
-            if self._acquired == 0 and self._closed:
+            if not self._closed and not self.is_alive():
+                # Dead feeds are useless even if they have clients.
+                # Forcibly close it to clean-up, then reopen.
+                self._close()
+            if self._closed:
                 self._open()
             self._acquired += 1
 
