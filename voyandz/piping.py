@@ -231,6 +231,7 @@ class _Feed:
         self._pipeline = None
         self._cmd = cmd
         self._closed = True
+        self._input_opened = False
         self._total_transfer_so_far = 0
 
     @property
@@ -283,7 +284,6 @@ class _Feed:
                 self._close()
 
     def _open(self):
-        self.input_feed.open()
         cmd = shlex.split(self._cmd)
         logfile = subprocess.DEVNULL
         feed_rpipe = subprocess.DEVNULL
@@ -291,6 +291,8 @@ class _Feed:
         wpipe = None
         buffer_ = None
         try:
+            self.input_feed.open()
+            self._input_opened = True
             rpipe, wpipe = os.pipe()
             buffer_ = _MultiClientBuffer()
             # Ownership of pipes is transferred to the Pipeline.
@@ -343,7 +345,9 @@ class _Feed:
             except subprocess.TimeoutExpired:
                 p.kill()
                 p.wait()
-        self.input_feed.close()
+        if self._input_opened:
+            self.input_feed.close()
+            self._input_opened = False
 
     def _is_mode_valid(self, mode):
         return mode in ["continuous", "on-demand"] or isinstance(mode, (float, int))
