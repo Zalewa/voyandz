@@ -495,8 +495,10 @@ class _Pipeline:
     def close(self):
         self.dead = True
         self.outbuffer.close()
-        os.close(self.feed_pipe)
-        self.feed_pipe = None
+        feed_pipe = self.feed_pipe
+        if feed_pipe is not None:
+            os.close(self.feed_pipe)
+            self.feed_pipe = None
 
     def close_timedout(self):
         self.outbuffer.close_timedout()
