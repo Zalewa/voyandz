@@ -365,11 +365,14 @@ class _Feed:
 
 
 class _Plumbing:
+    _TIMEDOUT_CHECK = 0.2
+
     def __init__(self):
         self._pipelines = {}
         self._lock = threading.Condition()
         self._thread = None
         self._running = False
+        self._prev_timeout_check = _monotonic()
 
     def add_pipeline(self, pipeline):
         with self._lock:
@@ -439,7 +442,7 @@ class _Plumbing:
         all_pending_pipelines = []
         all_pending_wpipes = []
         for pipeline in pipelines.values():
-            if not pipeline.lifecheck() or pipeline.to_close:
+            if pipeline.to_close:
                 dead_feed_pipes.add(pipeline.feed_pipe)
                 continue
             pending_wpipes = pipeline.pending_wpipes()
@@ -467,8 +470,12 @@ class _Plumbing:
         # Slow clients must get discarded, otherwise there's risk of
         # out-of-memory errors as buffers grow indefinitely to ensure
         # that clients don't lose any data.
-        for pipeline in pipelines.values():
-            pipeline.close_timedout()
+        if _monotonic() - self._prev_timeout_check > self._TIMEDOUT_CHECK:
+            for pipeline in pipelines.values():
+                pipeline.close_timedout()
+            if not pipeline.lifecheck():
+                dead_feed_pipes.add(pipeline.feed_pipe)
+            self._prev_timeout_check = _monotonic()
         # Reap graveyard.
         if dead_feed_pipes:
             dead_pipelines = []
