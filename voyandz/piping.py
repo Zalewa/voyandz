@@ -444,7 +444,7 @@ class _Plumbing:
                 continue
             pending_wpipes = pipeline.pending_wpipes()
             if pending_wpipes:
-                all_pending_pipelines.append(pipeline)
+                all_pending_pipelines.append((pending_wpipes, pipeline))
                 all_pending_wpipes += pending_wpipes
         ready_feed_pipes, ready_pending_wpipes, _ = select.select(feed_pipes, all_pending_wpipes, [], _CLIENT_WPIPE_TIMEOUT)
         # Deal with new data.
@@ -457,9 +457,9 @@ class _Plumbing:
                 pipelines[feed_pipe].write(chunk)
         # Deal with data that was already waiting to be piped out.
         if ready_pending_wpipes:
-            for pipeline in all_pending_pipelines:
+            for wpipes, pipeline in all_pending_pipelines:
                 pending_wpipes_for_this_buf = [wpipe for wpipe in ready_pending_wpipes
-                                               if wpipe in pipeline.pending_wpipes()]
+                                               if wpipe in wpipes]
                 if pending_wpipes_for_this_buf:
                     pipeline.flush(pending_wpipes_for_this_buf, _PIPE_CHUNK_SIZE)
         # Close timed out or slow pipelines; also close pipelines that are
