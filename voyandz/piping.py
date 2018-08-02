@@ -541,37 +541,39 @@ class _MultiClientBuffer:
         with self._pipes_lock:
             if self._closed:
                 raise IOError(errno.EIO, "already closed")
+            pipes = dict(self._pipes)
             rpipe, wpipe = os.pipe()
-            self._pipes[wpipe] = _PipeBuffer(wpipe)
+            pipes[wpipe] = _PipeBuffer(wpipe)
+            self._pipes = pipes
             return rpipe
 
     def write(self, chunk):
         if self._closed:
             return
-        for pipe in self._copy_pipes().values():
+        for pipe in self._pipes.values():
             pipe.write(chunk)
 
     def flush(self, wpipes, amount):
-        pipes = self._copy_pipes()
         bad_wpipes = []
         for wpipe in wpipes:
             try:
-                pipe = pipes[wpipe]
-                pipe.flush(amount)
+                pipe = self._pipes.get(wpipe)
+                if pipe:
+                    pipe.flush(amount)
             except OSError:
                 bad_wpipes.append(wpipe)
         if bad_wpipes:
             with self._pipes_lock:
-                self._close_wpipes(bad_wpipes)
+                self._pipes = self._close_wpipes(dict(self._pipes), bad_wpipes)
 
     def pending_wpipes(self):
-        return [wpipe for (wpipe, pipe) in self._copy_pipes().items() if pipe.pending]
+        return [wpipe for (wpipe, pipe) in self._pipes.items() if pipe.pending]
 
     def close_timedout(self):
         with self._pipes_lock:
             timedout_wpipes = [wpipe for wpipe in self._pipes
                                if self._pipes[wpipe].timedout]
-            self._close_wpipes(timedout_wpipes)
+            self._pipes = self._close_wpipes(dict(self._pipes), timedout_wpipes)
 
     def close(self):
         with self._pipes_lock:
@@ -580,18 +582,15 @@ class _MultiClientBuffer:
                 os.close(wpipe)
             self._pipes = {}
 
-    def _copy_pipes(self):
-        with self._pipes_lock:
-            return dict(self._pipes)
-
-    def _close_wpipes(self, wpipes):
+    def _close_wpipes(self, pipes, wpipes):
         for wpipe in wpipes:
             try:
                 os.close(wpipe)
             except OSError:
                 pass
-            if wpipe in self._pipes:
-                del self._pipes[wpipe]
+            if wpipe in pipes:
+                del pipes[wpipe]
+        return pipes
 
 
 class _PipeBuffer:
