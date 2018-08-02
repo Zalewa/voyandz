@@ -3,21 +3,34 @@ from . import config, logging, version
 import voyandz
 
 from optparse import OptionParser
+import os
 import sys
 
 
 def main():
-    print_version()
-    options = parse_args()
-    if options.version:
-        exit(0)
-    print("", file=sys.stderr)
+    profile_file = os.environ.get("VOYANDZ_PROFILE")
+    if profile_file:
+        import yappi
+        yappi.start()
     try:
-        cfg = config.init_app_config(voyandz.app, options.conffile)
-    except config.ConfigError:
-        exit(1)
-    voyandz.app.run(host=cfg['listenaddr'], port=cfg['listenport'],
-                    request_handler=logging.FormattedRequestHandler)
+        print_version()
+        options = parse_args()
+        if options.version:
+            exit(0)
+        print("", file=sys.stderr)
+        try:
+            cfg = config.init_app_config(voyandz.app, options.conffile)
+        except config.ConfigError:
+            exit(1)
+        voyandz.app.run(host=cfg['listenaddr'], port=cfg['listenport'],
+                        request_handler=logging.FormattedRequestHandler)
+    finally:
+        if profile_file:
+            yappi.stop()
+            pstats = yappi.convert2pstats(yappi.get_func_stats())
+            pstats.dump_stats(profile_file)
+            with open(profile_file + ".threads", "w") as threads_file:
+                yappi.get_thread_stats().print_all(threads_file)
 
 
 def print_version(file=sys.stderr):
