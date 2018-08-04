@@ -33,6 +33,11 @@ class Mode(NameEnum):
     DEFAULT = ONDEMAND
 
 
+class StreamType(NameEnum):
+    STREAM = enum.auto()
+    SHOT = enum.auto()
+
+
 class Error(Exception):
     pass
 
@@ -65,11 +70,11 @@ def stream(cfg, stream_name, logdir):
     except KeyError:
         raise Error("stream '{}' is of unknown mimetype".format(mimetype))
     feeds_cfg = cfg.get('feeds', {})
-    stream_type = stream_cfg.get("type")
+    stream_type = StreamType.of(stream_cfg.get("type"))
     try:
-        if stream_type == "stream":
+        if stream_type == StreamType.STREAM:
             output = _stream(stream_name, stream_cfg, feeds_cfg, logdir)
-        elif stream_type == "shot":
+        elif stream_type == StreamType.SHOT:
             output = _shot(stream_cfg, feeds_cfg, logdir)
         else:
             raise Error("stream '{}' is of unknown type".format(stream_name))

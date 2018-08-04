@@ -43,9 +43,9 @@ def stream(name):
         return flask.make_response("<pre>{}</pre>".format(
             flask.escape(str(e))), 500)
     else:
-        if stream_type == "stream":
+        if stream_type == piping.StreamType.STREAM:
             return flask.Response(output, mimetype=stream_mimetype)
-        elif stream_type == "shot":
+        elif stream_type == piping.StreamType.SHOT:
             return flask.send_file(BytesIO(output), mimetype=stream_mimetype)
         else:
             return flask.make_response("this stream is of unknown type", 500)
