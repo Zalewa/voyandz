@@ -6,7 +6,6 @@ import werkzeug.serving
 from io import BytesIO
 import datetime
 import json
-import os
 
 
 _DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S UTC"
