@@ -35,7 +35,7 @@ def hello(path):
 @app.route('/stream/<name>')
 def stream(name):
     try:
-        stream_type, stream_mimetype, output = piping.stream(_cfg(), name, _cfg().get("logdir"))
+        stream_type, stream_mimetype, output = piping.stream(_cfg(), name, _logdir())
     except piping.NoSuchStreamError as e:
         flask.abort(404)
     except piping.Error as e:
@@ -118,8 +118,7 @@ def autostart():
     _autostarted = True
     for feed_name, feed in _cfg("feeds").items():
         if piping.Mode.of(feed.get("mode")) == piping.Mode.AUTOSTART:
-            feed = piping.feed_pipeline(
-                _cfg("feeds"), feed_name, _cfg().get("logdir"))
+            feed = piping.feed_pipeline(_cfg("feeds"), feed_name, _logdir())
             # This 'open' action doesn't have a corresponding
             # 'close'. Autostart feeds are meant to be running
             # for the entire lifetime of the server.
@@ -152,6 +151,10 @@ def _find_stream(path):
         if path == stream_url:
             return stream_name
     return None
+
+
+def _logdir():
+    return _cfg().get("logdir")
 
 
 def _cfg(path=""):

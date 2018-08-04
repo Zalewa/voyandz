@@ -472,7 +472,9 @@ class _Plumbing:
             if pending_wpipes:
                 all_pending_pipelines.append((pending_wpipes, pipeline))
                 all_pending_wpipes += pending_wpipes
-        ready_feed_pipes, ready_pending_wpipes, _ = select.select(feed_pipes, all_pending_wpipes, [], _CLIENT_WPIPE_TIMEOUT)
+        ready_feed_pipes, ready_pending_wpipes, _ = select.select(
+            feed_pipes, all_pending_wpipes, [],
+            _CLIENT_WPIPE_TIMEOUT)
         # Deal with new data.
         for feed_pipe in ready_feed_pipes:
             chunk = os.read(feed_pipe, _PIPE_CHUNK_SIZE)
