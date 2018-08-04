@@ -14,6 +14,28 @@ def _format_time_on_record(self, record, *args, **kwargs):
     return s
 
 
+def time_to_duration(time_):
+    time_ = int(time_)
+    minute = 60
+    hour = 60 * minute
+    day = 24 * hour
+    units = [
+        (day, 'd'),
+        (hour, 'h'),
+        (minute, 'm'),
+        (1, 's')
+    ]
+    duration = []
+    for unit, label in units:
+        if time_ >= unit:
+            duration.append("{}{}".format(time_ // unit, label))
+            time_ %= unit
+    if duration:
+        return ' '.join(duration)
+    else:
+        return '0s'
+
+
 class LogFormatter(logging.Formatter):
     _DATEFMT = '%Y-%m-%d %H:%M:%S'
     _REQUEST_FORMATTER = logging.Formatter(

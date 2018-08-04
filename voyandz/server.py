@@ -63,6 +63,9 @@ def config_page():
 def stat():
     if not _cfg('pages/stat'):
         flask.abort(403)
+    now_date = _nowdate()
+    uptime = logging.time_to_duration(
+        now_date.timestamp() - _start_date.timestamp())
     all_feeds = sorted(_cfg('feeds').keys(), key=lambda k: k.lower())
     feeds_stats = [piping.feed_stats(feed) for feed in all_feeds]
     all_streams = sorted(_cfg('streams').keys(), key=lambda k: k.lower())
@@ -70,7 +73,8 @@ def stat():
     return flask.render_template(
         'stat.html',
         start_date=_start_date.strftime(_DATETIME_FORMAT),
-        current_date=_nowdate().strftime(_DATETIME_FORMAT),
+        current_date=now_date.strftime(_DATETIME_FORMAT),
+        uptime=uptime,
         feeds=feeds_stats, streams=stream_stats,
         totals=stats.Totals(feed_stats=feeds_stats, stream_stats=stream_stats))
 
