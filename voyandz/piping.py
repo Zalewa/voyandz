@@ -18,6 +18,13 @@ _PIPE_CHUNK_SIZE = select.PIPE_BUF
 _CLIENT_WPIPE_TIMEOUT = 10.0
 
 
+class Client(NameEnum):
+    EXCLUSIVE = enum.auto()
+    SHARED = enum.auto()
+
+    DEFAULT = SHARED
+
+
 class Mode(NameEnum):
     AUTOSTART = enum.auto()
     CONTINUOUS = enum.auto()
@@ -104,7 +111,7 @@ def _stats(name, feed_id):
 def _stream(stream_name, stream_cfg, feeds_cfg, logdir):
     cmd = stream_cfg['command']
     stream_id = _mk_stream_id(stream_name)
-    exclusive = (stream_cfg.get("client") == "exclusive")
+    exclusive = (Client.of(stream_cfg.get("client")) == Client.EXCLUSIVE)
 
     def generate():
         feed = feed_pipeline(feeds_cfg, stream_cfg.get('feed'), logdir=logdir)
