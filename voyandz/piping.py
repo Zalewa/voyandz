@@ -12,6 +12,7 @@ import shlex
 import subprocess
 
 
+AUTOSTART_MODE = "autostart"
 _PIPE_CHUNK_SIZE = select.PIPE_BUF
 _CLIENT_WPIPE_TIMEOUT = 10.0
 
@@ -38,7 +39,7 @@ class NoSuchStreamError(Error):
     pass
 
 
-def stream(cfg, stream_name):
+def stream(cfg, stream_name, logdir):
     try:
         stream_cfg = cfg['streams'][stream_name]
     except KeyError:
@@ -51,9 +52,9 @@ def stream(cfg, stream_name):
     stream_type = stream_cfg.get("type")
     try:
         if stream_type == "stream":
-            output = _stream(stream_name, stream_cfg, feeds_cfg, cfg.get('logdir'))
+            output = _stream(stream_name, stream_cfg, feeds_cfg, logdir)
         elif stream_type == "shot":
-            output = _shot(stream_cfg, feeds_cfg)
+            output = _shot(stream_cfg, feeds_cfg, logdir)
         else:
             raise Error("stream '{}' is of unknown type".format(stream_name))
     except Exception as e:
@@ -62,6 +63,17 @@ def stream(cfg, stream_name):
         else:
             raise Error(str(e)) from e
     return stream_type, mimetype, output
+
+
+def feed_pipeline(feeds_cfg, feed_name, logdir):
+    if not feed_name:
+        return _null_feed
+    try:
+        feed_cfg = feeds_cfg[feed_name]
+    except KeyError:
+        raise NoSuchFeedError("feed '{}' cannot be found".format(feed_name))
+    parent_feed = feed_pipeline(feeds_cfg, feed_cfg.get('feed'), logdir)
+    return _feed(feed_name, feed_cfg, logdir=logdir, input_feed=parent_feed)
 
 
 def stream_stats(name):
@@ -86,7 +98,7 @@ def _stream(stream_name, stream_cfg, feeds_cfg, logdir):
     exclusive = (stream_cfg.get("client") == "exclusive")
 
     def generate():
-        feed = _feed_for_stream(stream_cfg.get('feed'), feeds_cfg, logdir=logdir)
+        feed = feed_pipeline(feeds_cfg, stream_cfg.get('feed'), logdir=logdir)
         with _global_ctx.feed(stream_id, cmd, feed,
                               logdir=logdir, exclusive=exclusive) as stream:
             stream_rpipe = stream.new_reader()
@@ -101,9 +113,9 @@ def _stream(stream_name, stream_cfg, feeds_cfg, logdir):
     return generate()
 
 
-def _shot(stream_cfg, feeds_cfg):
+def _shot(stream_cfg, feeds_cfg, logdir):
     cmd = shlex.split(stream_cfg['command'])
-    with _feed_for_stream(stream_cfg.get('feed'), feeds_cfg, logdir=stream_cfg.get('logdir')) as feed:
+    with feed_pipeline(feeds_cfg, stream_cfg.get('feed'), logdir=logdir) as feed:
         stdin = None
         if feed:
             stdin = feed.new_reader()
@@ -119,17 +131,6 @@ def _shot(stream_cfg, feeds_cfg):
             return stdout
         else:
             raise Error(stderr.decode('utf-8', 'replace'))
-
-
-def _feed_for_stream(feed_name, feeds_cfg, logdir):
-    if not feed_name:
-        return _null_feed
-    try:
-        feed_cfg = feeds_cfg[feed_name]
-    except KeyError:
-        raise NoSuchFeedError("feed '{}' cannot be found".format(feed_name))
-    parent_feed = _feed_for_stream(feed_cfg.get('feed'), feeds_cfg, logdir)
-    return _feed(feed_name, feed_cfg, logdir=logdir, input_feed=parent_feed)
 
 
 def _feed(feed_name, feed_cfg, logdir, input_feed=None):
@@ -354,7 +355,8 @@ class _Feed:
             self._input_opened = False
 
     def _is_mode_valid(self, mode):
-        return mode in ["continuous", "on-demand"] or isinstance(mode, (float, int))
+        return (mode in [AUTOSTART_MODE, "continuous", "on-demand"]
+                or isinstance(mode, (float, int)))
 
     def __enter__(self):
         self.open()

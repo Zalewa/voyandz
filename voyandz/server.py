@@ -1,5 +1,7 @@
 from voyandz import app, config, logging, piping, stats
+
 import flask
+import werkzeug.serving
 
 from io import BytesIO
 import datetime
@@ -10,6 +12,7 @@ import os
 _DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S UTC"
 
 flask.logging.default_handler.setFormatter(logging.LogFormatter())
+_autostarted = False
 _start_date = datetime.datetime.now(datetime.timezone.utc)
 
 
@@ -32,7 +35,7 @@ def hello(path):
 @app.route('/stream/<name>')
 def stream(name):
     try:
-        stream_type, stream_mimetype, output = piping.stream(_cfg(), name)
+        stream_type, stream_mimetype, output = piping.stream(_cfg(), name, _cfg().get("logdir"))
     except piping.NoSuchStreamError as e:
         flask.abort(404)
     except piping.Error as e:
@@ -50,7 +53,7 @@ def stream(name):
 
 @app.route('/config')
 def config_page():
-    if not _cfg('pages/config') and os.environ.get('FLASK_ENV') != 'development':
+    if not _cfg('pages/config') and not _is_debug_mode():
         flask.abort(403)
     output = json.dumps(app.config['voyandz'], indent=2)
     return flask.Response(output, mimetype="application/json")
@@ -75,8 +78,9 @@ def stat():
 @app.before_first_request
 def init():
     # Known problem: this can't configure listen port and listen address.
-    if config.CONF_KEY not in app.config:
+    if not _is_cfg_loaded():
         config.init_app_config(app, None)
+    autostart()
 
 
 @app.after_request
@@ -92,6 +96,34 @@ def add_headers(request):
     request.headers["Pragma"] = "no-cache"
     request.headers["Expires"] = "0"
     return request
+
+
+def autostart():
+    global _autostarted
+
+    if _is_debug_mode() and not _is_debug_mode_in_reloader():
+        # Debug mode will start the actual application in
+        # a subprocess. The parent process will still call
+        # this function, but should not execute the autostart
+        # code.
+        #
+        # Also, this check is a hacky workaround at best,
+        # probably resulting in a flimsy behavior that may
+        # change drastically with different Flask versions.
+        return
+    if _autostarted:
+        return
+    if not _is_cfg_loaded():
+        raise config.ConfigError("config must be loaded before autostart")
+    _autostarted = True
+    for feed_name, feed in _cfg("feeds").items():
+        if feed.get("mode") == piping.AUTOSTART_MODE:
+            feed = piping.feed_pipeline(
+                _cfg("feeds"), feed_name, _cfg().get("logdir"))
+            # This 'open' action doesn't have a corresponding
+            # 'close'. Autostart feeds are meant to be running
+            # for the entire lifetime of the server.
+            feed.open()
 
 
 def _home_page():
@@ -128,6 +160,22 @@ def _cfg(path=""):
     for token in tokens:
         root = root[token]
     return root
+
+
+def _is_cfg_loaded():
+    return config.CONF_KEY in app.config
+
+
+def _is_debug_mode():
+    if hasattr(flask.app, "get_debug_flag"):
+        return flask.app.get_debug_flag()
+    else:
+        # Err on the side of no-debug mode if we can't determine.
+        return False
+
+
+def _is_debug_mode_in_reloader():
+    return _is_debug_mode() and werkzeug.serving.is_running_from_reloader()
 
 
 def _nowdate():

@@ -1,5 +1,5 @@
 # coding: utf-8
-from . import config, logging, version
+from . import config, logging, server, version
 import voyandz
 
 from optparse import OptionParser
@@ -22,6 +22,7 @@ def main():
             cfg = config.init_app_config(voyandz.app, options.conffile)
         except config.ConfigError:
             exit(1)
+        server.autostart()
         voyandz.app.run(host=cfg['listenaddr'], port=cfg['listenport'],
                         request_handler=logging.FormattedRequestHandler)
     finally:
