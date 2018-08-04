@@ -117,7 +117,7 @@ def autostart():
         raise config.ConfigError("config must be loaded before autostart")
     _autostarted = True
     for feed_name, feed in _cfg("feeds").items():
-        if feed.get("mode") == piping.AUTOSTART_MODE:
+        if piping.Mode.of(feed.get("mode")) == piping.Mode.AUTOSTART:
             feed = piping.feed_pipeline(
                 _cfg("feeds"), feed_name, _cfg().get("logdir"))
             # This 'open' action doesn't have a corresponding

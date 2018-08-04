@@ -1,8 +1,10 @@
 # coding: utf-8
 from .logging import logopen
 from .stats import FeedStats
+from .util import NameEnum, monotonic
 
 import atexit
+import enum
 import errno
 import os
 import threading
@@ -12,9 +14,16 @@ import shlex
 import subprocess
 
 
-AUTOSTART_MODE = "autostart"
 _PIPE_CHUNK_SIZE = select.PIPE_BUF
 _CLIENT_WPIPE_TIMEOUT = 10.0
+
+
+class Mode(NameEnum):
+    AUTOSTART = enum.auto()
+    CONTINUOUS = enum.auto()
+    ONDEMAND = 'on-demand'
+
+    DEFAULT = ONDEMAND
 
 
 class Error(Exception):
@@ -136,9 +145,9 @@ def _shot(stream_cfg, feeds_cfg, logdir):
 def _feed(feed_name, feed_cfg, logdir, input_feed=None):
     input_feed = input_feed or _null_feed
     command = feed_cfg['command']
-    mode = feed_cfg.get('mode', 'on-demand')
+    mode = feed_cfg.get('mode', Mode.DEFAULT.value)
     if isinstance(mode, str):
-        mode = mode.lower()
+        mode = Mode.of(mode.lower())
     return _global_ctx.feed(_mk_feed_id(feed_name),
                             command, input_feed=input_feed,
                             mode=mode, logdir=logdir)
@@ -157,7 +166,7 @@ class _GlobalContext:
         self._feeds = []
         self._feed_lock = threading.Lock()
 
-    def feed(self, feed_id, cmd, input_feed=None, mode="on-demand",
+    def feed(self, feed_id, cmd, input_feed=None, mode=Mode.DEFAULT,
              logdir=None, exclusive=False):
         with self._feed_lock:
             feed = self._find_free_feed(feed_id, exclusive)
@@ -218,7 +227,7 @@ class _GlobalContext:
 
 
 class _Feed:
-    def __init__(self, feed_id, cmd, input_feed, mode="on-demand",
+    def __init__(self, feed_id, cmd, input_feed, mode=Mode.DEFAULT,
                  logdir=None):
         if not self._is_mode_valid(mode):
             raise Error("invalid mode '{}'".format(mode))
@@ -275,7 +284,7 @@ class _Feed:
         with self._lock:
             self._acquired -= 1
             if self._acquired <= 0:
-                if self.mode == "on-demand":
+                if self.mode == Mode.ONDEMAND:
                     self._close()
                 elif isinstance(self.mode, (int, float)):
                     t = threading.Thread(target=self._delayed_close, args=(self.mode,))
@@ -355,7 +364,7 @@ class _Feed:
             self._input_opened = False
 
     def _is_mode_valid(self, mode):
-        return (mode in [AUTOSTART_MODE, "continuous", "on-demand"]
+        return (mode in Mode
                 or isinstance(mode, (float, int)))
 
     def __enter__(self):
@@ -374,7 +383,7 @@ class _Plumbing:
         self._lock = threading.Condition()
         self._thread = None
         self._running = False
-        self._prev_timeout_check = _monotonic()
+        self._prev_timeout_check = monotonic()
 
     def add_pipeline(self, pipeline):
         with self._lock:
@@ -472,12 +481,12 @@ class _Plumbing:
         # Slow clients must get discarded, otherwise there's risk of
         # out-of-memory errors as buffers grow indefinitely to ensure
         # that clients don't lose any data.
-        if _monotonic() - self._prev_timeout_check > self._TIMEDOUT_CHECK:
+        if monotonic() - self._prev_timeout_check > self._TIMEDOUT_CHECK:
             for pipeline in pipelines.values():
                 pipeline.close_timedout()
             if not pipeline.lifecheck():
                 dead_feed_pipes.add(pipeline.feed_pipe)
-            self._prev_timeout_check = _monotonic()
+            self._prev_timeout_check = monotonic()
         # Reap graveyard.
         if dead_feed_pipes:
             dead_pipelines = []
@@ -606,11 +615,11 @@ class _PipeBuffer:
     def __init__(self, pipe):
         self._pipe = pipe
         self._buffer = b''
-        self._last_ready = _monotonic()
+        self._last_ready = monotonic()
 
     @property
     def timedout(self):
-        return (_monotonic() - self._last_ready) > _CLIENT_WPIPE_TIMEOUT
+        return (monotonic() - self._last_ready) > _CLIENT_WPIPE_TIMEOUT
 
     @property
     def pending(self):
@@ -628,7 +637,7 @@ class _PipeBuffer:
             if e.errno not in [errno.EAGAIN, errno.EWOULDBLOCK]:
                 raise
         else:
-            self._last_ready = _monotonic()
+            self._last_ready = monotonic()
             self._buffer = payload[written_len:]
 
     def fileno(self):
@@ -658,10 +667,6 @@ def _mk_feed_id(name):
 
 def _mk_stream_id(name):
     return "stream_{}".format(name)
-
-
-def _monotonic():
-    return time.clock_gettime(time.CLOCK_MONOTONIC_RAW)
 
 
 _null_feed = _NullFeed()
