@@ -4,8 +4,9 @@ import yaml
 
 DEFAULT_CONFFILE = "/etc/voyandz"
 CONFFILE_ENV = "VOYANDZ_CONFFILE"
-
 CONF_KEY = "voyandz"
+
+PROFILE_ENV = "VOYANDZ_PROFILE"
 
 
 class ConfigError(Exception):

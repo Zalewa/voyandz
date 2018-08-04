@@ -8,7 +8,7 @@ import sys
 
 
 def main():
-    profile_file = os.environ.get("VOYANDZ_PROFILE")
+    profile_file = os.environ.get(config.PROFILE_ENV)
     if profile_file:
         import yappi
         yappi.start()
