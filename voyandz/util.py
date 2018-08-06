@@ -4,9 +4,6 @@ import time
 
 
 class NameEnum(Enum):
-    def _generate_next_value_(name, start, count, last_values):
-        return name.lower()
-
     @classmethod
     def of(cls, name):
         for member in cls.__members__.values():

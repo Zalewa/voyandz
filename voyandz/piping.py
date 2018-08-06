@@ -4,7 +4,6 @@ from .stats import FeedStats
 from .util import NameEnum, monotonic
 
 import atexit
-import enum
 import errno
 import os
 import threading
@@ -19,23 +18,23 @@ _CLIENT_WPIPE_TIMEOUT = 10.0
 
 
 class Client(NameEnum):
-    EXCLUSIVE = enum.auto()
-    SHARED = enum.auto()
+    EXCLUSIVE = 'exclusive'
+    SHARED = 'shared'
 
     DEFAULT = SHARED
 
 
 class Mode(NameEnum):
-    AUTOSTART = enum.auto()
-    CONTINUOUS = enum.auto()
+    AUTOSTART = 'autostart'
+    CONTINUOUS = 'continuous'
     ONDEMAND = 'on-demand'
 
     DEFAULT = ONDEMAND
 
 
 class StreamType(NameEnum):
-    STREAM = enum.auto()
-    SHOT = enum.auto()
+    STREAM = 'stream'
+    SHOT = 'shot'
 
 
 class Error(Exception):
