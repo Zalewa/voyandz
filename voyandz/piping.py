@@ -159,6 +159,8 @@ def _feed(feed_name, feed_cfg, logdir, input_feed=None):
     mode = feed_cfg.get('mode', Mode.DEFAULT.value)
     if isinstance(mode, str):
         mode = Mode.of(mode.lower())
+        if mode is None:
+            raise Error("invalid feed mode '{}'".format(feed_cfg.get('mode')))
     return _global_ctx.feed(_mk_feed_id(feed_name),
                             command, input_feed=input_feed,
                             mode=mode, logdir=logdir)
