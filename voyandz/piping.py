@@ -5,16 +5,26 @@ from .util import NameEnum, monotonic
 
 import atexit
 import errno
+import fcntl
 import os
 import threading
 import time
 import select
 import shlex
 import subprocess
+import sys
 
 
-_PIPE_CHUNK_SIZE = select.PIPE_BUF
+MAX_PIPE_SIZE = None
+PIPE_CHUNK_SIZE = select.PIPE_BUF
+PIPESZ_FCNTL_ALLOWED = False
+
 _CLIENT_WPIPE_TIMEOUT = 10.0
+
+# These should be defined in 'fcntl', but they aren't.
+# The values were printfed in a C program.
+_F_SETPIPE_SZ = 1031
+_F_GETPIPE_SZ = 1032
 
 
 class Client(NameEnum):
@@ -124,7 +134,7 @@ def _stream(stream_name, stream_cfg, feeds_cfg, logdir):
             stream_rpipe = stream.new_reader()
             try:
                 while stream.is_alive():
-                    chunk = os.read(stream_rpipe, _PIPE_CHUNK_SIZE)
+                    chunk = os.read(stream_rpipe, PIPE_CHUNK_SIZE)
                     if not chunk:
                         break
                     yield chunk
@@ -320,7 +330,7 @@ class _Feed:
         try:
             self.input_feed.open()
             self._input_opened = True
-            rpipe, wpipe = os.pipe()
+            rpipe, wpipe = _mk_pipe()
             buffer_ = _MultiClientBuffer()
             # Ownership of pipes is transferred to the Pipeline.
             self._pipeline = _Pipeline(rpipe, buffer_, lifecheck=self.is_alive)
@@ -418,7 +428,7 @@ class _Plumbing:
         self._pipeline_notify_rpipe, self._pipeline_notify_wpipe = None, None
         try:
             self._running = True
-            self._pipeline_notify_rpipe, self._pipeline_notify_wpipe = os.pipe()
+            self._pipeline_notify_rpipe, self._pipeline_notify_wpipe = _mk_pipe()
             t = threading.Thread(target=self._run)
             t.daemon = True
             t.start()
@@ -478,7 +488,7 @@ class _Plumbing:
             _CLIENT_WPIPE_TIMEOUT)
         # Deal with new data.
         for feed_pipe in ready_feed_pipes:
-            chunk = os.read(feed_pipe, _PIPE_CHUNK_SIZE)
+            chunk = os.read(feed_pipe, PIPE_CHUNK_SIZE)
             if not chunk:
                 dead_feed_pipes.add(feed_pipe)
                 continue
@@ -490,7 +500,7 @@ class _Plumbing:
                 pending_wpipes_for_this_buf = [wpipe for wpipe in ready_pending_wpipes
                                                if wpipe in wpipes]
                 if pending_wpipes_for_this_buf:
-                    pipeline.flush(pending_wpipes_for_this_buf, _PIPE_CHUNK_SIZE)
+                    pipeline.flush(pending_wpipes_for_this_buf, PIPE_CHUNK_SIZE)
         # Close timed out or slow pipelines; also close pipelines that are
         # meant to be closed.
         # Slow clients must get discarded, otherwise there's risk of
@@ -537,7 +547,7 @@ class _Pipeline:
         self.outbuffer.close_timedout()
 
     def flush(self, wpipes, amount):
-        self.outbuffer.flush(wpipes, _PIPE_CHUNK_SIZE)
+        self.outbuffer.flush(wpipes, PIPE_CHUNK_SIZE)
 
     def is_alive(self):
         return not self.dead  # duh
@@ -575,7 +585,7 @@ class _MultiClientBuffer:
             if self._closed:
                 raise IOError(errno.EIO, "already closed")
             pipes = dict(self._pipes)
-            rpipe, wpipe = os.pipe()
+            rpipe, wpipe = _mk_pipe()
             pipes[wpipe] = _PipeBuffer(wpipe)
             self._pipes = pipes
             return rpipe
@@ -676,6 +686,19 @@ class _NullFeed:
         return False
 
 
+def _mk_pipe():
+    r, w = os.pipe()
+    if MAX_PIPE_SIZE and PIPESZ_FCNTL_ALLOWED:
+        try:
+            fcntl.fcntl(r, _F_SETPIPE_SZ, MAX_PIPE_SIZE)
+            fcntl.fcntl(w, _F_SETPIPE_SZ, MAX_PIPE_SIZE)
+        except Exception:
+            os.close(r)
+            os.close(w)
+            raise
+    return r, w
+
+
 def _mk_feed_id(name):
     return "feed_{}".format(name)
 
@@ -684,5 +707,35 @@ def _mk_stream_id(name):
     return "stream_{}".format(name)
 
 
+def _determine_pipe_sizes():
+    global MAX_PIPE_SIZE
+    global PIPE_CHUNK_SIZE
+    global PIPESZ_FCNTL_ALLOWED
+    try:
+        with open('/proc/sys/fs/pipe-max-size', 'r') as pipe_max_size_file:
+            MAX_PIPE_SIZE = int(pipe_max_size_file.read())
+    except Exception as e:
+        if not hasattr(e, 'errno') or e.errno != errno.EEXIST:
+            print("could not read pipe max size from OS: {}".format(e), file=sys.stderr)
+    r, w = os.pipe()
+    try:
+        pipe_size = fcntl.fcntl(r, _F_GETPIPE_SZ)
+        if MAX_PIPE_SIZE:
+            PIPE_CHUNK_SIZE = MAX_PIPE_SIZE // 2
+        else:
+            PIPE_CHUNK_SIZE = pipe_size // 2
+        PIPESZ_FCNTL_ALLOWED = True
+    except Exception:
+        print("could not get current pipe size: {}".format(e), file=sys.stderr)
+    finally:
+        os.close(r)
+        os.close(w)
+    if os.environ.get("FLASK_ENV") == "development":
+        print("MAX_PIPE_SIZE =", MAX_PIPE_SIZE, file=sys.stderr)
+        print("PIPE_CHUNK_SIZE =", PIPE_CHUNK_SIZE, file=sys.stderr)
+        print("PIPESZ_FCNTL_ALLOWED =", PIPESZ_FCNTL_ALLOWED, file=sys.stderr)
+
+
+_determine_pipe_sizes()
 _null_feed = _NullFeed()
 _global_ctx = _GlobalContext()
