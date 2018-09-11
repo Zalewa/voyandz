@@ -375,8 +375,13 @@ class _Feed:
         # Stop process.
         p = self._process
         self._process = None
-        if p:
-            p.terminate()
+        if p and p.poll() is None:
+            try:
+                p.terminate()
+            except ProcessLookupError:
+                # TODO - proper logging mechanism
+                print("attempted to terminate already closed process for "
+                      "feed {}".format(self._feed_id), file=sys.stderr)
             try:
                 p.wait(1.0)
             except subprocess.TimeoutExpired:
