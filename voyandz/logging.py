@@ -79,6 +79,7 @@ class FormattedRequestHandler(WSGIRequestHandler):
 def logopen(logdir, name, mode="a"):
     f = open(os.path.join(logdir, name), mode)
     f.write("[{}] Log opened\n".format(timestamp()))
+    f.flush()
     return f
 
 
