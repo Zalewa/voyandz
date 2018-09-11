@@ -274,7 +274,7 @@ class _Feed:
     @property
     def num_readers(self):
         pipeline = self._pipeline
-        return self._pipeline.num_readers if pipeline else 0
+        return pipeline.num_readers if pipeline else 0
 
     @property
     def total_transfer(self):
@@ -368,10 +368,10 @@ class _Feed:
         self._closed = True
         # Close pipeline
         pipeline = self._pipeline
+        self._pipeline = None
         if pipeline:
             self._total_transfer_so_far = pipeline.total_transfer
             _global_ctx.close_pipeline(pipeline)
-        self._pipeline = None
         # Stop process.
         p = self._process
         self._process = None
@@ -534,14 +534,25 @@ class _Pipeline:
         self.dead = False
         self.to_close = False
         self.total_transfer = 0
+        self._close_lock = threading.Lock()
 
     def close(self):
         self.dead = True
         self.outbuffer.close()
-        feed_pipe = self.feed_pipe
-        if feed_pipe is not None:
-            os.close(self.feed_pipe)
+        # A lock is not the best solution as there shouldn't be a case
+        # where a resource can be closed in more than one thread just as
+        # there shouldn't be a case where a different thread releases
+        # the resource than the one which acquired it. There is some
+        # ownership transferring happening with pipelines as pipelines
+        # must be monitored by a routine separate from the routine that
+        # yields data to HTTP clients - Flask's chunk yield system will
+        # get stuck on slow clients and there must be a parallel
+        # mechanism that will forcibly kill such pipelines.
+        with self._close_lock:
+            feed_pipe = self.feed_pipe
             self.feed_pipe = None
+            if feed_pipe is not None:
+                os.close(feed_pipe)
 
     def close_timedout(self):
         self.outbuffer.close_timedout()
