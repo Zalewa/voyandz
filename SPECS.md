@@ -136,7 +136,7 @@ To differ release builds from builds made from development commits,
 development version bump commit should be created as soon as release
 commit is tagged, and immediately follow this release commit.
 
-Development versions should end with 'dev' suffix, ie. `x.y.zdev`.
+Development versions should end with '.dev' suffix, ie. `x.y.z.dev`.
 
 Development version bump commit should not be tagged.
 
