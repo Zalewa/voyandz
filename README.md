@@ -136,7 +136,7 @@ error upon heavy load.
 voyandz makes extensive use of pipes. To improve piping performance,
 the size of those pipes is increased using `F_SETPIPE_SZ` `fcntl` calls.
 However, Linux kernel imposes a limit on non-root users on how much
-memory the pipes for any given user can be consumed. This setting is
+memory can be consumed by the pipes by each user. This limit is
 controlled through a kernel parameter
 
 ```
