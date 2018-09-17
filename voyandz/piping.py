@@ -15,6 +15,14 @@ import subprocess
 import sys
 
 
+# Default setting of fs.pipe-user-pages-soft is 16384 which amounts
+# to a total of 64MB of memory available for pipes for a non-root user.
+# As voyandz opens lots of pipes, there should be imposed an internal
+# limit on how large a single pipe can be, even if system states that
+# a single pipe can be larger.
+# https://patchwork.kernel.org/patch/8055531/
+LIMIT_MAX_PIPE_SIZE = 128 * 1024
+
 MAX_PIPE_SIZE = None
 PIPE_CHUNK_SIZE = select.PIPE_BUF
 PIPESZ_FCNTL_ALLOWED = False
@@ -702,12 +710,22 @@ class _NullFeed:
         return False
 
 
+_mkpipe_permission_error_printed = False
+
+
 def _mk_pipe():
     r, w = os.pipe()
     if MAX_PIPE_SIZE and PIPESZ_FCNTL_ALLOWED:
         try:
             fcntl.fcntl(r, _F_SETPIPE_SZ, MAX_PIPE_SIZE)
             fcntl.fcntl(w, _F_SETPIPE_SZ, MAX_PIPE_SIZE)
+        except PermissionError as perm_error:
+            global _mkpipe_permission_error_printed
+            if not _mkpipe_permission_error_printed or True:
+                print("cannot modify pipe size: {} - does the user have too "
+                      "many opens pipes already? {}".format(perm_error, _mkpipe_permission_error_printed),
+                      file=sys.stderr)
+                _mkpipe_permission_error_printed = True
         except Exception:
             os.close(r)
             os.close(w)
@@ -733,6 +751,8 @@ def _determine_pipe_sizes():
     except Exception as e:
         if not hasattr(e, 'errno') or e.errno != errno.EEXIST:
             print("could not read pipe max size from OS: {}".format(e), file=sys.stderr)
+    if MAX_PIPE_SIZE:
+        MAX_PIPE_SIZE = min(LIMIT_MAX_PIPE_SIZE, MAX_PIPE_SIZE)
     r, w = os.pipe()
     try:
         pipe_size = fcntl.fcntl(r, _F_GETPIPE_SZ)

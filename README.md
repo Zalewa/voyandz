@@ -123,3 +123,45 @@ Name
 
 V stands for Video, A stands for Audio, ff implies purpose.
 The rest is gibberish. Short name is `voyandz`, all lower-case.
+
+Troubleshooting
+===============
+
+**Problem:** Running on Linux and getting
+"cannot modify pipe size: [Errno 1] Operation not permitted"
+error upon heavy load.
+
+**Solution:**
+
+voyandz makes extensive use of pipes. To improve piping performance,
+the size of those pipes is increased using `F_SETPIPE_SZ` `fcntl` calls.
+However, Linux kernel imposes a limit on non-root users on how much
+memory the pipes for any given user can be consumed. This setting is
+controlled through a kernel parameter
+
+```
+  fs.pipe-user-pages-soft
+```
+
+The value of this parameter is expressed in *pages*, which means the total
+allowed size is at least 4kB times this value. You can read more at:
+https://patchwork.kernel.org/patch/8055531/
+
+voyandz will continue to operate even if the limit is breached, but all
+pipes that try to go above the limit will actually be limited to the
+size of one page. Once usage drops and old pipes are closed, new pipes
+recover the capability to increase their sizes.
+
+To allow more pipes to be opened with increased size do one of those:
+
+* `sudo sysctl fs.pipe-user-pages-soft=65536` to increase the limit;
+  Choose a value right for you if you think 65536 is still not enough.
+
+* `sudo sysctl fs.pipe-user-pages-soft=0` to disable the limit completely
+
+To persist this value between reboots add it to `/etc/sysctl.conf` or
+`/etc/sysctl.d/`.
+
+More info: http://man7.org/linux/man-pages/man7/pipe.7.html
+
+Keywords: pipe-user-pages-soft, PermissionError, Operation not permitted
