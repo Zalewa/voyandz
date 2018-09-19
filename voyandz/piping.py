@@ -142,6 +142,7 @@ def _stream(stream_name, stream_cfg, feeds_cfg, logdir):
             stream_rpipe = stream.new_reader()
             try:
                 while stream.is_alive():
+                    select.select([stream_rpipe], [], [])
                     chunk = os.read(stream_rpipe, PIPE_CHUNK_SIZE)
                     if not chunk:
                         break
@@ -714,7 +715,7 @@ _mkpipe_permission_error_printed = False
 
 
 def _mk_pipe():
-    r, w = os.pipe()
+    r, w = os.pipe2(os.O_NONBLOCK)
     if MAX_PIPE_SIZE and PIPESZ_FCNTL_ALLOWED:
         try:
             fcntl.fcntl(r, _F_SETPIPE_SZ, MAX_PIPE_SIZE)
