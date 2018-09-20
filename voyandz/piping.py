@@ -662,6 +662,9 @@ class _MultiClientBuffer:
 
 class _PipeBuffer:
     def __init__(self, pipe):
+        flags = fcntl.fcntl(pipe, fcntl.F_GETFL)
+        flags |= os.O_NONBLOCK
+        fcntl.fcntl(pipe, fcntl.F_SETFL, flags)
         self._pipe = pipe
         self._buffer = b''
         self._last_ready = monotonic()
@@ -757,9 +760,9 @@ def _determine_pipe_sizes():
     try:
         pipe_size = fcntl.fcntl(r, _F_GETPIPE_SZ)
         if MAX_PIPE_SIZE:
-            PIPE_CHUNK_SIZE = MAX_PIPE_SIZE // 2
+            PIPE_CHUNK_SIZE = MAX_PIPE_SIZE
         else:
-            PIPE_CHUNK_SIZE = pipe_size // 2
+            PIPE_CHUNK_SIZE = pipe_size
         PIPESZ_FCNTL_ALLOWED = True
     except Exception:
         print("could not get current pipe size: {}".format(e), file=sys.stderr)
