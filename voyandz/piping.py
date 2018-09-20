@@ -4,6 +4,7 @@ from .stats import FeedStats
 from .util import NameEnum, monotonic
 
 import atexit
+import ctypes
 import errno
 import fcntl
 import os
@@ -33,6 +34,7 @@ _CLIENT_WPIPE_TIMEOUT = 10.0
 # The values were printfed in a C program.
 _F_SETPIPE_SZ = 1031
 _F_GETPIPE_SZ = 1032
+_FIONREAD = 21531
 
 
 class Client(NameEnum):
@@ -665,6 +667,7 @@ class _PipeBuffer:
         self._pipe = pipe
         self._buffer = b''
         self._last_ready = monotonic()
+        self._total_size = fcntl.fcntl(self._pipe, _F_GETPIPE_SZ)
 
     @property
     def timedout(self):
@@ -681,6 +684,13 @@ class _PipeBuffer:
         payload = self._buffer
         try:
             if payload:
+                # Determine how much we can write without blocking
+                enqueued = ctypes.c_long(0)
+                returncode = fcntl.ioctl(self._pipe, _FIONREAD, enqueued)
+                if returncode == 0:
+                    space = max(0, self._total_size - enqueued.value)
+                    amount = min(space, amount)
+                # Now write as much as we can
                 written_len = os.write(self._pipe, payload[:amount])
         except OSError as e:
             if e.errno not in [errno.EAGAIN, errno.EWOULDBLOCK]:
@@ -757,9 +767,9 @@ def _determine_pipe_sizes():
     try:
         pipe_size = fcntl.fcntl(r, _F_GETPIPE_SZ)
         if MAX_PIPE_SIZE:
-            PIPE_CHUNK_SIZE = MAX_PIPE_SIZE // 2
+            PIPE_CHUNK_SIZE = MAX_PIPE_SIZE
         else:
-            PIPE_CHUNK_SIZE = pipe_size // 2
+            PIPE_CHUNK_SIZE = pipe_size
         PIPESZ_FCNTL_ALLOWED = True
     except Exception:
         print("could not get current pipe size: {}".format(e), file=sys.stderr)
