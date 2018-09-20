@@ -142,7 +142,6 @@ def _stream(stream_name, stream_cfg, feeds_cfg, logdir):
             stream_rpipe = stream.new_reader()
             try:
                 while stream.is_alive():
-                    select.select([stream_rpipe], [], [])
                     chunk = os.read(stream_rpipe, PIPE_CHUNK_SIZE)
                     if not chunk:
                         break
@@ -663,6 +662,9 @@ class _MultiClientBuffer:
 
 class _PipeBuffer:
     def __init__(self, pipe):
+        flags = fcntl.fcntl(pipe, fcntl.F_GETFL)
+        flags |= os.O_NONBLOCK
+        fcntl.fcntl(pipe, fcntl.F_SETFL, flags)
         self._pipe = pipe
         self._buffer = b''
         self._last_ready = monotonic()
@@ -715,7 +717,7 @@ _mkpipe_permission_error_printed = False
 
 
 def _mk_pipe():
-    r, w = os.pipe2(os.O_NONBLOCK)
+    r, w = os.pipe()
     if MAX_PIPE_SIZE and PIPESZ_FCNTL_ALLOWED:
         try:
             fcntl.fcntl(r, _F_SETPIPE_SZ, MAX_PIPE_SIZE)
@@ -758,9 +760,9 @@ def _determine_pipe_sizes():
     try:
         pipe_size = fcntl.fcntl(r, _F_GETPIPE_SZ)
         if MAX_PIPE_SIZE:
-            PIPE_CHUNK_SIZE = MAX_PIPE_SIZE // 2
+            PIPE_CHUNK_SIZE = MAX_PIPE_SIZE
         else:
-            PIPE_CHUNK_SIZE = pipe_size // 2
+            PIPE_CHUNK_SIZE = pipe_size
         PIPESZ_FCNTL_ALLOWED = True
     except Exception:
         print("could not get current pipe size: {}".format(e), file=sys.stderr)
