@@ -400,8 +400,10 @@ class _Feed:
             self._input_opened = False
 
     def _is_mode_valid(self, mode):
-        return (mode in Mode
-                or isinstance(mode, (float, int)))
+        try:
+            return isinstance(mode, (float, int)) or mode in Mode
+        except TypeError:
+            return False
 
     def __enter__(self):
         self.open()
