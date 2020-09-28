@@ -16,6 +16,7 @@ setup(
     version=version['VERSION'],
     description='Voyoffnik Andzej - an AV HTTP piping server',
     long_description=readme,
+    long_description_content_type="text/markdown",
     author='Robikz',
     author_email='zalewapl@gmail.com',
     license=license,
