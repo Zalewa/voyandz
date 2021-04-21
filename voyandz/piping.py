@@ -524,8 +524,8 @@ class _Plumbing:
         if monotonic() - self._prev_timeout_check > self._TIMEDOUT_CHECK:
             for pipeline in pipelines.values():
                 pipeline.close_timedout()
-            if not pipeline.lifecheck():
-                dead_feed_pipes.add(pipeline.feed_pipe)
+                if not pipeline.lifecheck():
+                    dead_feed_pipes.add(pipeline.feed_pipe)
             self._prev_timeout_check = monotonic()
         # Reap graveyard.
         if dead_feed_pipes:
