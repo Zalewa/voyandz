@@ -35,7 +35,7 @@ def hello(path):
 def stream(name):
     try:
         stream_type, stream_mimetype, output = piping.stream(_cfg(), name, _logdir())
-    except piping.NoSuchStreamError as e:
+    except piping.NoSuchStreamError:
         flask.abort(404)
     except piping.Error as e:
         app.logger.exception(e)

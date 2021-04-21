@@ -766,7 +766,7 @@ def _determine_pipe_sizes():
         else:
             PIPE_CHUNK_SIZE = pipe_size
         PIPESZ_FCNTL_ALLOWED = True
-    except Exception:
+    except Exception as e:
         print("could not get current pipe size: {}".format(e), file=sys.stderr)
     finally:
         os.close(r)
