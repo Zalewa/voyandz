@@ -1,3 +1,3 @@
 FULLNAME = "Voyoffnik Andzej"
-VERSION = "0.2.3"
+VERSION = "0.2.4"
 YEARSPAN = "2018, 2020 - 2021"
