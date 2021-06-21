@@ -669,11 +669,12 @@ class _PipeBuffer:
         fcntl.fcntl(pipe, fcntl.F_SETFL, flags)
         self._pipe = pipe
         self._buffer = b''
-        self._last_ready = monotonic()
+        self._last_write = monotonic()
+        self._last_flush = monotonic()
 
     @property
     def timedout(self):
-        return (monotonic() - self._last_ready) > _CLIENT_WPIPE_TIMEOUT
+        return (self._last_write - self._last_flush) > _CLIENT_WPIPE_TIMEOUT
 
     @property
     def pending(self):
@@ -681,6 +682,7 @@ class _PipeBuffer:
 
     def write(self, chunk):
         self._buffer += chunk
+        self._last_write = monotonic()
 
     def flush(self, amount):
         payload = self._buffer
@@ -691,7 +693,7 @@ class _PipeBuffer:
             if e.errno not in [errno.EAGAIN, errno.EWOULDBLOCK]:
                 raise
         else:
-            self._last_ready = monotonic()
+            self._last_flush = monotonic()
             self._buffer = payload[written_len:]
 
     def fileno(self):
