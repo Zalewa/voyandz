@@ -21,6 +21,7 @@ setup(
     author_email='zalewapl@gmail.com',
     license=license,
     include_package_data=True,
+    zip_safe=False,
     packages=['voyandz'],
     install_requires=[
         'Flask',
