@@ -1,4 +1,4 @@
-from voyandz import app, config, logging, piping, stats
+from voyandz import app, config, logging, piping, stats, version
 
 import flask
 import werkzeug.serving
@@ -75,7 +75,8 @@ def stat():
         current_date=now_date.strftime(_DATETIME_FORMAT),
         uptime=uptime,
         feeds=feeds_stats, streams=stream_stats,
-        totals=stats.Totals(feed_stats=feeds_stats, stream_stats=stream_stats))
+        totals=stats.Totals(feed_stats=feeds_stats, stream_stats=stream_stats),
+        server_version=version.VERSION)
 
 
 @app.before_first_request
