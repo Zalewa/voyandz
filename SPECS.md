@@ -202,7 +202,7 @@ Feeds should be configurable as:
 * Continuous - in this mode the feed will be always active, draining
   resources even if there's no one using it. This mode is useful
   when the input source doesn't handle disconnections or subsequent
-  reconnections very well. Feed in 'continous' mode doesn't start
+  reconnections very well. Feed in 'continuous' mode doesn't start
   until it's needed for the first time.
 
 * Autostart - like the 'continuous' mode, but doesn't wait on first
@@ -341,7 +341,7 @@ Status API
 Optional.
 
 Provide the information presented on the status page in form
-pallatable to other programs. Use JSON format to encode it.
+palatable to other programs. Use JSON format to encode it.
 
 The status API should be accessible through an URL that defaults
 to '/stat.json'.
@@ -385,6 +385,6 @@ MIME type.
 Authorization
 -------------
 
-This is a FFA situation. Authorization is currently not in the goals.
+This is a free-for-all situation. Authorization is currently not in the goals.
 
 If needed, basic HTTP authorization can be implemented.
