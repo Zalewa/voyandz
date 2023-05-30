@@ -15,7 +15,7 @@ rundev:
 
 clean:
 	python3 setup.py clean
-	rm -rf build dist voyandz.egg-info
-	rm -rf voyandz/__pycache__
+	rm -rf build dist src/voyandz.egg-info
+	rm -rf src/voyandz/__pycache__
 
 .PHONY: sdist init install dev rundev clean
