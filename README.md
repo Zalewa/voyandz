@@ -95,7 +95,7 @@ Create virtual env, install dependencies, link the application:
 To start in development mode:
 
 ```
-  FLASK_ENV=development voyandz -f config/minimal
+  voyandz --develop
 ```
 
 Cleaning:

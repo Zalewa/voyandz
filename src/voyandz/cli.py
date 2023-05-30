@@ -1,5 +1,5 @@
 # coding: utf-8
-from . import config, logging, server, version
+from . import config, logging, version
 import voyandz
 
 from optparse import OptionParser
@@ -16,15 +16,18 @@ def main():
         print_version()
         options = parse_args()
         if options.version:
-            exit(0)
+            sys.exit(0)
         print("", file=sys.stderr)
+        app = voyandz.create_app()
         try:
-            cfg = config.init_app_config(voyandz.app, options.conffile)
+            cfg = init_app_config(app, options.conffile)
         except config.ConfigError:
-            exit(1)
-        server.autostart()
-        voyandz.app.run(host=cfg['listenaddr'], port=cfg['listenport'],
-                        request_handler=logging.FormattedRequestHandler)
+            sys.exit(1)
+        with app.app_context():
+            from . import server
+            server.autostart()
+        app.run(host=cfg['listenaddr'], port=cfg['listenport'], debug=options.develop,
+                request_handler=logging.FormattedRequestHandler)
     finally:
         if profile_file:
             yappi.stop()
@@ -47,7 +50,22 @@ def parse_args():
     opt_parser.add_option('-f', dest='conffile',
                           help='change config file (default: {})'.format(config.DEFAULT_CONFFILE),
                           default=config.DEFAULT_CONFFILE)
+    opt_parser.add_option('--develop', default=False, action='store_true',
+                          help='enable development mode')
     opt_parser.add_option('-V', '--version', dest='version', default=False,
                           action='store_true', help='display version and quit')
     options, _ = opt_parser.parse_args()
     return options
+
+
+def init_app_config(app, conffile=None):
+    if conffile is None:
+        conffile = os.environ.get(config.CONFFILE_ENV) or config.DEFAULT_CONFFILE
+    app.logger.info("Using config file '{}'".format(conffile))
+    try:
+        cfg = config.load_config_from_file(conffile)
+    except config.ConfigError as e:
+        print("config error '{}': {}".format(conffile, e))
+        raise
+    app.config[config.CONF_KEY] = cfg
+    return cfg

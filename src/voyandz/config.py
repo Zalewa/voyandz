@@ -13,35 +13,19 @@ class ConfigError(Exception):
     pass
 
 
-def init_app_config(app, conffile=None):
-    '''This function is designed to exit the application
-    if config loading fails.
-    '''
-    if conffile is None:
-        conffile = os.environ.get(CONFFILE_ENV) or DEFAULT_CONFFILE
-    app.logger.info("Using config file '{}'".format(conffile))
-    try:
-        cfg = load_config_from_file(conffile)
-    except ConfigError as e:
-        print("config error '{}': {}".format(conffile, e))
-        raise
-    app.config[CONF_KEY] = cfg
-    return cfg
-
-
 def load_config_from_file(filepath):
     try:
         with open(filepath, 'r') as f:
-            return load_config(f)
+            try:
+                cfg = yaml.safe_load(f) or {}
+            except yaml.error.YAMLError as e:
+                raise ConfigError(str(e)) from e
+            return load_config(cfg)
     except IOError as e:
         raise ConfigError(str(e)) from e
 
 
-def load_config(io):
-    try:
-        cfg = yaml.safe_load(io) or {}
-    except yaml.error.YAMLError as e:
-        raise ConfigError(str(e)) from e
+def load_config(cfg):
     cfg.setdefault('listenaddr', '127.0.0.1')
     cfg.setdefault('listenport', 8090)
     cfg.setdefault('pages', {})

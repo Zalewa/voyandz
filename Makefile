@@ -11,7 +11,7 @@ dev:
 	python3 setup.py develop
 
 rundev:
-	FLASK_APP=voyandz FLASK_ENV=development flask run
+	voyandz --develop
 
 clean:
 	python3 setup.py clean

@@ -1,7 +1,9 @@
-from voyandz import app, config, logging, piping, stats, version
+from voyandz import config, logging, piping, stats, version
 
 import flask
+import markupsafe
 import werkzeug.serving
+from flask import current_app as app
 
 from io import BytesIO
 import datetime
@@ -40,7 +42,7 @@ def stream(name):
     except piping.Error as e:
         app.logger.exception(e)
         return flask.make_response("<pre>{}</pre>".format(
-            flask.escape(str(e))), 500)
+            markupsafe.escape(str(e))), 500)
     else:
         if stream_type == piping.StreamType.STREAM:
             return flask.Response(output, mimetype=stream_mimetype)
@@ -77,14 +79,6 @@ def stat():
         feeds=feeds_stats, streams=stream_stats,
         totals=stats.Totals(feed_stats=feeds_stats, stream_stats=stream_stats),
         server_version=version.VERSION)
-
-
-@app.before_first_request
-def init():
-    # Known problem: this can't configure listen port and listen address.
-    if not _is_cfg_loaded():
-        config.init_app_config(app, None)
-    autostart()
 
 
 @app.after_request
@@ -174,8 +168,8 @@ def _is_cfg_loaded():
 
 
 def _is_debug_mode():
-    if hasattr(flask.app, "get_debug_flag"):
-        return flask.app.get_debug_flag()
+    if hasattr(app, "get_debug_flag"):
+        return app.get_debug_flag()
     else:
         # Err on the side of no-debug mode if we can't determine.
         return False
