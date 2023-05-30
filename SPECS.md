@@ -1,16 +1,16 @@
-Voyoffnik Andzej - SPECIFICATION DOCUMENT
-=========================================
+Voyandz - SPECIFICATION DOCUMENT
+================================
 
-Voyoffnik Andzej (voyandz) is a real-time AV streaming server akin to
-the discontinued `ffserver`. Its primary purpose is to enable network
-streaming of audio, video or audio & video in form of continuous,
-non-seekable streams. The source feed can be any feed that can be
-provided in a streamable form through a preinstalled program such as
-`ffmpeg`. The output stream can be any stream that can be produced by
-a preinstalled program such as `ffmpeg`. Voyoffnik Andzej itself
-doesn't delve into codec details, but merely deals with piping.
+Voyandz is a real-time AV streaming server akin to the discontinued
+`ffserver`. Its primary purpose is to enable network streaming of audio,
+video or audio & video in form of continuous, non-seekable streams. The
+source feed can be any feed that can be provided in a streamable form
+through a preinstalled program such as `ffmpeg`. The output stream can
+be any stream that can be produced by a preinstalled program such as
+`ffmpeg`. Voyandz itself doesn't delve into codec details, but merely
+deals with piping.
 
-Voyoffnik Andzej is implemented in Python 3 using Flask microframework.
+Voyandz is implemented in Python 3 using the Flask microframework.
 
 
 Goals - Main Imperative
@@ -49,8 +49,8 @@ Goals - Secondary
 Name
 ====
 
-V stands for Video, A stands for Audio, ff implies purpose.
-The rest is gibberish. Short name is `voyandz`, all lower-case.
+The name is `voyandz`, all lower-case. V stands for video,
+A stands for Audio, the rest is gibberish.
 
 
 Repository Structure
