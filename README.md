@@ -111,11 +111,13 @@ Repository Structure
 Project file structure should adhere to the practices
 recommended for Python and Flask projects.
 
+The src layout is used.
+
 ```
   .
   |- config - example configuration files
   |- sandbox - development scraps, experiments
-  \- voyandz - application code
+  \- src/voyandz - application code
 ```
 
 Name
