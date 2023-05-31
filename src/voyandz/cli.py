@@ -35,8 +35,8 @@ def main():
 
 
 def print_version(file=sys.stderr):
-    print("{} ({}) {} ({})".format(
-        version.FULLNAME, voyandz.__name__,
+    print("{} {} ({})".format(
+        version.FULLNAME,
         version.VERSION, version.YEARSPAN),
         file=file)
     print("On MIT License; no warranty", file=file)
