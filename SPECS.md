@@ -67,8 +67,9 @@ otherwisely "arcane" commands.
 Source material:
 
 1. http://docs.python-guide.org/en/latest/writing/structure/
-2. https://github.com/kennethreitz/samplemod
-3. http://flask.pocoo.org/docs/0.12/patterns/distribute/#
+2. https://packaging.python.org/en/latest/discussions/src-layout-vs-flat-layout/
+3. https://github.com/kennethreitz/samplemod
+4. http://flask.pocoo.org/docs/0.12/patterns/distribute/#
 
 
 Versioning
