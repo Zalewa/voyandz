@@ -1,10 +1,9 @@
-# coding: utf-8
-from . import config, logging, version
-import voyandz
-
-from optparse import OptionParser
 import os
 import sys
+from argparse import ArgumentParser
+
+import voyandz
+from . import config, logging, version
 
 
 def main():
@@ -14,19 +13,17 @@ def main():
         yappi.start()
     try:
         print_version()
-        options = parse_args()
-        if options.version:
-            sys.exit(0)
+        args = parse_args()
         print("", file=sys.stderr)
         app = voyandz.create_app()
         try:
-            cfg = init_app_config(app, options.conffile)
+            cfg = init_app_config(app, args.conffile)
         except config.ConfigError:
             sys.exit(1)
         with app.app_context():
             from . import server
             server.autostart()
-        app.run(host=cfg['listenaddr'], port=cfg['listenport'], debug=options.develop,
+        app.run(host=cfg['listenaddr'], port=cfg['listenport'], debug=args.develop,
                 request_handler=logging.FormattedRequestHandler)
     finally:
         if profile_file:
@@ -46,16 +43,15 @@ def print_version(file=sys.stderr):
 
 
 def parse_args():
-    opt_parser = OptionParser()
-    opt_parser.add_option('-f', dest='conffile',
-                          help='change config file (default: {})'.format(config.DEFAULT_CONFFILE),
-                          default=config.DEFAULT_CONFFILE)
-    opt_parser.add_option('--develop', default=False, action='store_true',
-                          help='enable development mode')
-    opt_parser.add_option('-V', '--version', dest='version', default=False,
-                          action='store_true', help='display version and quit')
-    options, _ = opt_parser.parse_args()
-    return options
+    argp = ArgumentParser()
+    argp.add_argument('-f', dest='conffile',
+                      help='change config file (%(default)s)',
+                      default=config.DEFAULT_CONFFILE)
+    argp.add_argument('--develop', default=False, action='store_true',
+                      help='enable development mode')
+    argp.add_argument('-V', '--version', action='version',
+                      version='{} {}'.format(version.NAME, version.VERSION))
+    return argp.parse_args()
 
 
 def init_app_config(app, conffile=None):
