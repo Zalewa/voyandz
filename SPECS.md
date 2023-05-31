@@ -125,21 +125,15 @@ as tag name but use spaces instead of underscores.
   git tag -am 'voyandz v1.11.4' voyandz_v1.11.4
 ```
 
-Version bumping commits must follow this commit message pattern:
+The program is versioned by tagging alone. There's no hardcoded version
+number in the source-code. Version bump commits are unnecessary.
 
-```
-  Version: voyandz vx.y.z
-```
+The setuptools-scm package is used to determine the version from
+the git tag.
 
-The `z` part in `x.y.z` musn't be ommitted, even if it's `0`.
-
-To differ release builds from builds made from development commits,
-development version bump commit should be created as soon as release
-commit is tagged, and immediately follow this release commit.
-
-Development versions should end with '.dev' suffix, ie. `x.y.z.dev`.
-
-Development version bump commit should not be tagged.
+Development versions (not made directly from a tagged commit) should
+be denoted as such. This is covered by setuptools-scm and done in
+accordance to [PEP 440](https://peps.python.org/pep-0440/).
 
 
 Implementation

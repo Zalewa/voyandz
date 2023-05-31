@@ -18,4 +18,7 @@ clean:
 	rm -rf build dist src/voyandz.egg-info
 	rm -rf src/voyandz/__pycache__
 
-.PHONY: sdist init install dev rundev clean
+distclean: clean
+	rm -rf .eggs
+
+.PHONY: sdist init install dev rundev clean distclean
