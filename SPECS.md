@@ -344,6 +344,14 @@ to '/stat.json'.
 The status API access should be toggleable, but defaulting to enabled.
 
 
+Launching
+---------
+
+Voyandz is a stand-alone application that is started from its own
+command. The installer creates a `voyandz` executable in a location
+appropriate for Python packages.
+
+
 Configuration
 -------------
 
