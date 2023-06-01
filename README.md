@@ -105,6 +105,18 @@ Cleaning:
   rm -rf venv
 ```
 
+Packaging
+=========
+
+Packaging requires the [`build`](https://pypi.org/project/build/)
+package. Install it, then run:
+
+```
+  make dist
+```
+
+The sdist and wheel packages will be built in the `dist/` directory.
+
 Repository Structure
 ====================
 

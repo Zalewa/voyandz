@@ -1,3 +1,6 @@
+dist:
+	python3 -m build
+
 sdist:
 	python3 setup.py sdist
 
@@ -21,4 +24,4 @@ clean:
 distclean: clean
 	rm -rf .eggs
 
-.PHONY: sdist init install dev rundev clean distclean
+.PHONY: dist sdist init install dev rundev clean distclean
